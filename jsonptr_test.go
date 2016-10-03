@@ -68,6 +68,8 @@ func TestGet(t *testing.T) {
 	checkGet(t, `{"/~":"z"}`, `/~1~0`, "z")
 	checkGet(t, `{"~~~":"x"}`, `/~0~0~0`, "x")
 	checkGet(t, `{"~x~":"x"}`, `/~0x~0`, "x")
+	checkGet(t, `{"/~~/":"z"}`, `/~1~0~0~1`, "z")
+	checkGet(t, `{"1éé":"z"}`, `/1éé`, "z")
 	checkGet(t, `{"a":{}}`, `/a`, map[string]interface{}{})
 	checkGet(t, `{"a":[]}`, `/a`, []interface{}{})
 	checkGet(t, `{"a":[1,2]}`, `/a/0`, float64(1))
