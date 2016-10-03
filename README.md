@@ -1,6 +1,4 @@
-# jsonptr
-
-JSON Pointer ([RFC 6901](https://tools.ietf.org/html/rfc6901)) for Go.
+# jsonptr - JSON Pointer ([RFC 6901](https://tools.ietf.org/html/rfc6901)) for Go
 
 [![GoDoc](https://img.shields.io/badge/godoc-reference-blue.svg)](https://godoc.org/github.com/dolmen-go/jsonptr)
 [![Travis-CI](https://img.shields.io/travis/dolmen-go/jsonptr.svg)](https://travis-ci.org/dolmen-go/jsonptr)
