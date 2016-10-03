@@ -10,6 +10,8 @@ import (
 	"testing"
 )
 
+var _ error = (*PtrError)(nil)
+
 func checkGet(t *testing.T, jsonData string, ptr string, expected interface{}) {
 	t.Logf("%v => \"%v\"", jsonData, ptr)
 	var data interface{}

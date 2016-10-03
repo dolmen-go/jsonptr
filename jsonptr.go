@@ -2,6 +2,7 @@
 // Use of this source code is governed by the Apache 2.0 license that
 // can be found in the LICENSE file.
 
+// Package jsonptr implements JSON Pointer (RFC 6901) lookup
 package jsonptr
 
 import (
@@ -17,11 +18,16 @@ var (
 	ErrProperty = errors.New("property not found")
 )
 
+// PtrError is the structured error for JSON Pointer parsing or navigation
+// errors
 type PtrError struct {
+	// Ptr is the substring of the original pointer where the error occured
 	Ptr string
+	// Err is one of ErrSyntax, ErrIndex, ErrProperty
 	Err error
 }
 
+// Error implement the 'error' interface
 func (e *PtrError) Error() string {
 	return strconv.Quote(e.Ptr) + ": " + e.Err.Error()
 }
@@ -90,6 +96,9 @@ func propertyName(b []byte) (string, error) {
 	), nil
 }
 
+// Get extracts a value from a JSON-like data tree
+//
+// In case of error a PtrError is returned
 func Get(doc interface{}, ptr string) (interface{}, error) {
 	if len(ptr) == 0 {
 		return doc, nil
@@ -139,6 +148,9 @@ func Get(doc interface{}, ptr string) (interface{}, error) {
 	return doc, nil
 }
 
+// Set modifies a JSON-like data tree
+//
+// In case of error a PtrError is returned
 func Set(doc *interface{}, ptr string, value interface{}) error {
 	if len(ptr) == 0 {
 		*doc = value
