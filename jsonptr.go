@@ -6,10 +6,10 @@
 package jsonptr
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
 	"strconv"
+	"strings"
 )
 
 var (
@@ -48,26 +48,26 @@ func docError(ptr string, doc interface{}) *PtrError {
 	return &PtrError{ptr, fmt.Errorf("not an object or array but %T", doc)}
 }
 
-func arrayIndex(b []byte) (int, error) {
-	if len(b) == 0 {
+func arrayIndex(token string) (int, error) {
+	if len(token) == 0 {
 		return -1, ErrSyntax
 	}
-	if len(b) == 1 {
-		if b[0] == '0' {
+	if len(token) == 1 {
+		if token[0] == '0' {
 			return 0, nil
 		}
-		if b[0] == '-' {
+		if token[0] == '-' {
 			return -1, nil
 		}
 	}
-	if b[0] < '1' {
+	if token[0] < '1' {
 		return -1, ErrSyntax
 	}
 	var n int
 	const maxInt = (1 << (strconv.IntSize - 1)) - 1
 	const cutoff = maxInt/10 + 1
-	for i := 0; i < len(b); i++ {
-		c := b[i]
+	for i := 0; i < len(token); i++ {
+		c := token[i]
 		if c < '0' || c > '9' {
 			return -1, ErrSyntax
 		}
@@ -86,14 +86,13 @@ func arrayIndex(b []byte) (int, error) {
 	return n, nil
 }
 
-func propertyName(b []byte) (string, error) {
+func propertyName(token string) (string, error) {
 	// FIXME reject '~' followed by something else than '0', '1'
-	return string(
-		bytes.Replace(
-			bytes.Replace(b,
-				[]byte(`~1`), []byte(`/`), -1),
-			[]byte(`~0`), []byte(`~`), -1),
-	), nil
+	return strings.Replace(
+			strings.Replace(token,
+				`~1`, `/`, -1),
+			`~0`, `~`, -1),
+		nil
 }
 
 // Get extracts a value from a JSON-like data tree
@@ -106,11 +105,10 @@ func Get(doc interface{}, ptr string) (interface{}, error) {
 	if ptr[0] != '/' {
 		return nil, syntaxError(ptr)
 	}
-	bptr := []byte(ptr)
-	cur := bptr[1:]
+	cur := ptr[1:]
 	p := int(1)
 	for {
-		q := bytes.IndexByte(cur, `/`[0])
+		q := strings.IndexByte(cur, '/')
 		if q == -1 {
 			q = len(cur)
 		}
@@ -120,29 +118,29 @@ func Get(doc interface{}, ptr string) (interface{}, error) {
 		case map[string]interface{}:
 			key, err := propertyName(cur[:q])
 			if err != nil {
-				return nil, &PtrError{string(bptr[:p]), err}
+				return nil, &PtrError{ptr[:p], err}
 			}
 			var ok bool
 			if doc, ok = here[key]; !ok {
-				return nil, propertyError(string(bptr[:p]))
+				return nil, propertyError(ptr[:p])
 			}
 		case []interface{}:
 			n, err := arrayIndex(cur[:q])
 			if err != nil {
-				return nil, &PtrError{string(bptr[:p]), err}
+				return nil, &PtrError{ptr[:p], err}
 			}
 			if n < 0 || n >= len(here) {
-				return nil, indexError(string(bptr[:p]))
+				return nil, indexError(ptr[:p])
 			}
 			doc = here[n]
 		default:
-			return nil, docError(string(bptr[:p]), doc)
+			return nil, docError(ptr[:p], doc)
 		}
-		if p >= len(bptr) {
+		if p >= len(ptr) {
 			break
 		}
 		p++
-		cur = bptr[p:]
+		cur = ptr[p:]
 	}
 
 	return doc, nil
@@ -156,13 +154,12 @@ func Set(doc *interface{}, ptr string, value interface{}) error {
 		*doc = value
 		return nil
 	}
-	bptr := []byte(ptr)
-	p := bytes.LastIndexByte(bptr, '/')
+	p := strings.LastIndexByte(ptr, '/')
 	if p < 0 {
 		return syntaxError(ptr)
 	}
-	prop := bptr[p+1:]
-	parentPtr := string(bptr[:p])
+	prop := ptr[p+1:]
+	parentPtr := ptr[:p]
 
 	parent, err := Get(*doc, parentPtr)
 	if err != nil {
