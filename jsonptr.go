@@ -27,7 +27,7 @@ type PtrError struct {
 	Err error
 }
 
-// Error implement the 'error' interface
+// Error implements the 'error' interface
 func (e *PtrError) Error() string {
 	return strconv.Quote(e.Ptr) + ": " + e.Err.Error()
 }
