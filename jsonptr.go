@@ -21,7 +21,7 @@ var (
 // PtrError is the structured error for JSON Pointer parsing or navigation
 // errors
 type PtrError struct {
-	// Ptr is the substring of the original pointer where the error occured
+	// Ptr is the substring of the original pointer where the error occurred
 	Ptr string
 	// Err is one of ErrSyntax, ErrIndex, ErrProperty
 	Err error
