@@ -86,13 +86,39 @@ func arrayIndex(token string) (int, error) {
 	return n, nil
 }
 
+// propertyName unescapes a property name:
+//  `~1` => '/'
+//  `~0` => '~'
+// Any '~' followed by something else (or nothing) is an error
 func propertyName(token string) (string, error) {
-	// FIXME reject '~' followed by something else than '0', '1'
-	return strings.Replace(
-			strings.Replace(token,
-				`~1`, `/`, -1),
-			`~0`, `~`, -1),
-		nil
+	p := strings.IndexByte(token, '~')
+	if p == -1 {
+		return token, nil
+	}
+	if token[len(token)-1] == '~' {
+		return "", ErrSyntax
+	}
+
+	// Copy to a working buffer
+	b := []byte(token)
+	for q := p; q < len(token); q++ {
+		if b[q] == '~' {
+			q++
+			switch b[q] {
+			case '0':
+				b[p] = '~'
+			case '1':
+				b[p] = '/'
+			default:
+				return "", ErrSyntax
+			}
+		} else {
+			// Move byte
+			b[p] = b[q]
+		}
+		p++
+	}
+	return string(b[:p]), nil
 }
 
 // Get extracts a value from a JSON-like data tree
