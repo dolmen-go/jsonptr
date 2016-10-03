@@ -85,8 +85,8 @@ func propertyName(b []byte) (string, error) {
 	return string(
 		bytes.Replace(
 			bytes.Replace(b,
-				[]byte(`~1`), []byte(`/`), 0),
-			[]byte(`~0`), []byte(`~`), 0),
+				[]byte(`~1`), []byte(`/`), -1),
+			[]byte(`~0`), []byte(`~`), -1),
 	), nil
 }
 
