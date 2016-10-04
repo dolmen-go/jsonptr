@@ -4,6 +4,12 @@
 [![Travis-CI](https://img.shields.io/travis/dolmen-go/jsonptr.svg)](https://travis-ci.org/dolmen-go/jsonptr)
 [![Go Report Card](https://goreportcard.com/badge/github.com/dolmen-go/jsonptr)](https://goreportcard.com/report/github.com/dolmen-go/jsonptr)
 
+## Features
+
+1. First-class interface
+2. Correctness
+3. Speed (see [benchmark](https://github.com/dolmen-go/jsonptr-benchmark))
+
 ## Example
 
 ```go
