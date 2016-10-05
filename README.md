@@ -6,8 +6,19 @@
 
 ## Features
 
+Goals:
 1. First-class interface
-2. Correctness
+    * Idiomatic
+    * Short
+    * Complete
+    * Structured errors, not just string (work in progress)
+    * Working at JSON data level, not limited to serialized JSON
+2. Correctness (all existing open source implementations have limitations in their interface or implementation)
+    * Full testsuite (work in progress)
+    * Reject invalid escapes (regexp `/~[^01]/`)
+    * Allow any JSON value as leaf node
+    * Allow any JSON value as root (not just a `map[string]interface{}`)
+    * Allow to get/set the root of the document with the empty pointer
 3. Speed (see [benchmark](https://github.com/dolmen-go/jsonptr-benchmark))
 
 ## Example
@@ -43,6 +54,11 @@ This is still early work in progress.
 
 The aim is code coverage of 100%. Use go coverage tools and consider any
 code not covered by the testsuite as never tested and full of bugs.
+
+Todo:
+* tests of error cases
+* `Set`: tests of array growth
+* `Delete`
 
 ## License
 
