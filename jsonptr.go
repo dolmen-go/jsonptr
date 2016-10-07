@@ -6,16 +6,19 @@
 package jsonptr
 
 import (
-	"errors"
 	"fmt"
 	"strconv"
 	"strings"
 )
 
+type stringError string
+
+func (err stringError) Error() string { return string(err) }
+
 var (
-	ErrSyntax   = errors.New("invalid JSON pointer")
-	ErrIndex    = errors.New("invalid array index")
-	ErrProperty = errors.New("property not found")
+	ErrSyntax   = stringError("invalid JSON pointer")
+	ErrIndex    = stringError("invalid array index")
+	ErrProperty = stringError("property not found")
 )
 
 // PtrError is the structured error for JSON Pointer parsing or navigation
