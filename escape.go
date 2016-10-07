@@ -40,13 +40,22 @@ func Escape(name string) string {
 	return string(b)
 }
 
+var ErrUsage = stringError("invalid use of json.Unescape on string with '/'")
+
 // Unescape unescapes a property name:
 //  `~1` => '/'
 //  `~0` => '~'
-// Any '~' followed by something else (or nothing) is an error
+// Any '~' followed by something else (or nothing) is an error ErrSyntax
+// Any '/' is an error ErrUsage
 func Unescape(token string) (string, error) {
 	p := strings.IndexByte(token, '~')
 	if p == -1 {
+		/*
+			// Costly check just to detect unlikely bad usage
+			if strings.IndexByte(token, '/') >= 0 {
+				return "", ErrUsage
+			}
+		*/
 		return token, nil
 	}
 	if token[len(token)-1] == '~' {
@@ -56,7 +65,8 @@ func Unescape(token string) (string, error) {
 	// Copy to a working buffer
 	b := []byte(token)
 	for q := p; q < len(token); q++ {
-		if b[q] == '~' {
+		switch b[q] {
+		case '~':
 			q++
 			switch b[q] {
 			case '0':
@@ -66,7 +76,9 @@ func Unescape(token string) (string, error) {
 			default:
 				return "", ErrSyntax
 			}
-		} else {
+		case '/':
+			return "", ErrUsage
+		default:
 			// Move byte
 			b[p] = b[q]
 		}
