@@ -31,3 +31,36 @@ func TestEscape(t *testing.T) {
 	checkEscape(t, "é~", "é~0")
 	checkEscape(t, "~é", "~0é")
 }
+
+func TestUnescape(t *testing.T) {
+	for _, test := range []struct {
+		in, out string
+		err     error
+	}{
+		{"", "", nil},
+		{"x", "x", nil},
+		{"~0", "~", nil},
+		{"~1", "/", nil},
+		{"~0~1", "~/", nil},
+		{"~1~0", "/~", nil},
+		{"x~1~0", "x/~", nil},
+		{"x~1y~0", "x/y~", nil},
+		{"~", "", ErrSyntax},
+		{"~~", "", ErrSyntax},
+		{"~a", "", ErrSyntax},
+		{"~a ", "", ErrSyntax},
+		{"a ~", "", ErrSyntax},
+		{"a ~ x", "", ErrSyntax},
+		{"a ~0 ~x", "", ErrSyntax},
+	} {
+		t.Logf("%s => %s", test.in, test.out)
+		got, err := Unescape(test.in)
+		if err != test.err {
+			t.Logf("got: %s, expected: %s", err, test.err)
+			t.Fail()
+		} else if test.err != nil && got != test.out {
+			t.Logf("got: %s, expected: %s", got, test.out)
+			t.Fail()
+		}
+	}
+}

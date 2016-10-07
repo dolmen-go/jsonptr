@@ -86,41 +86,6 @@ func arrayIndex(token string) (int, error) {
 	return n, nil
 }
 
-// propertyName unescapes a property name:
-//  `~1` => '/'
-//  `~0` => '~'
-// Any '~' followed by something else (or nothing) is an error
-func propertyName(token string) (string, error) {
-	p := strings.IndexByte(token, '~')
-	if p == -1 {
-		return token, nil
-	}
-	if token[len(token)-1] == '~' {
-		return "", ErrSyntax
-	}
-
-	// Copy to a working buffer
-	b := []byte(token)
-	for q := p; q < len(token); q++ {
-		if b[q] == '~' {
-			q++
-			switch b[q] {
-			case '0':
-				b[p] = '~'
-			case '1':
-				b[p] = '/'
-			default:
-				return "", ErrSyntax
-			}
-		} else {
-			// Move byte
-			b[p] = b[q]
-		}
-		p++
-	}
-	return string(b[:p]), nil
-}
-
 // Get extracts a value from a JSON-like data tree
 //
 // In case of error a PtrError is returned
@@ -142,7 +107,7 @@ func Get(doc interface{}, ptr string) (interface{}, error) {
 
 		switch here := (doc).(type) {
 		case map[string]interface{}:
-			key, err := propertyName(cur[:q])
+			key, err := Unescape(cur[:q])
 			if err != nil {
 				return nil, &PtrError{ptr[:p], err}
 			}
@@ -194,7 +159,7 @@ func Set(doc *interface{}, ptr string, value interface{}) error {
 
 	switch parent := (parent).(type) {
 	case map[string]interface{}:
-		key, err := propertyName(prop)
+		key, err := Unescape(prop)
 		if err != nil {
 			return &PtrError{ptr, err}
 		}

@@ -1,5 +1,7 @@
 package jsonptr
 
+import "strings"
+
 // Escape a property name with JSON Pointer escapes:
 // "~" => "~0",
 // "/" => "~1"
@@ -36,4 +38,39 @@ func Escape(name string) string {
 	}
 
 	return string(b)
+}
+
+// Unescape unescapes a property name:
+//  `~1` => '/'
+//  `~0` => '~'
+// Any '~' followed by something else (or nothing) is an error
+func Unescape(token string) (string, error) {
+	p := strings.IndexByte(token, '~')
+	if p == -1 {
+		return token, nil
+	}
+	if token[len(token)-1] == '~' {
+		return "", ErrSyntax
+	}
+
+	// Copy to a working buffer
+	b := []byte(token)
+	for q := p; q < len(token); q++ {
+		if b[q] == '~' {
+			q++
+			switch b[q] {
+			case '0':
+				b[p] = '~'
+			case '1':
+				b[p] = '/'
+			default:
+				return "", ErrSyntax
+			}
+		} else {
+			// Move byte
+			b[p] = b[q]
+		}
+		p++
+	}
+	return string(b[:p]), nil
 }
