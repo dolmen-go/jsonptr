@@ -1,6 +1,7 @@
 package jsonptr
 
 import (
+	"strings"
 	"testing"
 )
 
@@ -34,6 +35,40 @@ func TestEscape(t *testing.T) {
 			t.Errorf("got: %#v\n", got)
 		}
 	}
+}
+
+var jsonptrReplacer = strings.NewReplacer(
+	"~", "~0",
+	"/", "~1",
+)
+
+func EscapeWithReplacer(s string) string {
+	return jsonptrReplacer.Replace(s)
+}
+
+func benchmarkEscape(b *testing.B, escapeFunc func(string) string, testCases []string) {
+	for i := 0; i < b.N; i++ {
+		for _, s := range testCases {
+			_ = escapeFunc(s)
+		}
+	}
+}
+
+var escapeBenchmarkCases = []string{
+	"property",
+	"name",
+	"id",
+	"/usr/local/go/pkg/",
+	"https://github.com/dolmen-go/jsonptr/",
+	"~/.ssh/authorized_keys",
+}
+
+func BenchmarkEscape(b *testing.B) {
+	benchmarkEscape(b, Escape, escapeBenchmarkCases)
+}
+
+func BenchmarkEscapeWithReplacer(b *testing.B) {
+	benchmarkEscape(b, EscapeWithReplacer, escapeBenchmarkCases)
 }
 
 func TestUnescape(t *testing.T) {
