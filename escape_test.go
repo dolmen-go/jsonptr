@@ -5,9 +5,6 @@ import (
 	"testing"
 )
 
-func checkEscape(t *testing.T, in, expected string) {
-}
-
 func TestEscape(t *testing.T) {
 	for _, tc := range []struct {
 		in, expected string
@@ -30,7 +27,7 @@ func TestEscape(t *testing.T) {
 		{"~é", "~0é"},
 	} {
 		t.Logf("%#v => %#v\n", tc.in, tc.expected)
-		got := Escape(tc.in)
+		got := EscapeString(tc.in)
 		if got != tc.expected {
 			t.Errorf("got: %#v\n", got)
 		}
@@ -64,7 +61,7 @@ var escapeBenchmarkCases = []string{
 }
 
 func BenchmarkEscape(b *testing.B) {
-	benchmarkEscape(b, Escape, escapeBenchmarkCases)
+	benchmarkEscape(b, EscapeString, escapeBenchmarkCases)
 }
 
 func BenchmarkEscapeWithReplacer(b *testing.B) {
@@ -93,7 +90,7 @@ func TestUnescape(t *testing.T) {
 		{"a ~0 ~x", "", ErrSyntax},
 	} {
 		t.Logf("%s => %s", test.in, test.out)
-		got, err := Unescape(test.in)
+		got, err := UnescapeString(test.in)
 		if err != test.err {
 			t.Logf("got: %s, expected: %s", err, test.err)
 			t.Fail()

@@ -110,7 +110,7 @@ func Get(doc interface{}, ptr string) (interface{}, error) {
 
 		switch here := (doc).(type) {
 		case map[string]interface{}:
-			key, err := Unescape(cur[:q])
+			key, err := UnescapeString(cur[:q])
 			if err != nil {
 				return nil, &PtrError{ptr[:p], err}
 			}
@@ -162,7 +162,7 @@ func Set(doc *interface{}, ptr string, value interface{}) error {
 
 	switch parent := (parent).(type) {
 	case map[string]interface{}:
-		key, err := Unescape(prop)
+		key, err := UnescapeString(prop)
 		if err != nil {
 			return &PtrError{ptr, err}
 		}
