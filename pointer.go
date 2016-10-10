@@ -41,7 +41,7 @@ func (ptr Pointer) String() string {
 			return "/" + strings.Join(escaped, "/")
 		}
 	}
-	return "/" + strings.Join(ptr[:], "/")
+	return "/" + strings.Join(ptr, "/")
 }
 
 func (ptr Pointer) Clone() Pointer {
