@@ -52,6 +52,8 @@ func TestPointer(t *testing.T) {
 		{up, "/foo"},
 		{property("a/a"), "/foo/a~1a"},
 		{chain(up, property("a~a")), "/foo/a~0a"},
+		{chain(up, property("~~//")), "/foo/~0~0~1~1"},
+		{chain(up, property("~01")), "/foo/~001"},
 		{chain(up, up), ""},
 	} {
 		t.Logf("Moving to \"%s\"", test.expected)
@@ -83,6 +85,15 @@ func TestPointer(t *testing.T) {
 		r = p.Clone()
 		if r.String() != test.expected {
 			t.Errorf("Clone error: got %s, expected %s", r.String(), test.expected)
+		} else {
+			r.Property("baz")
+			if r.String() != test.expected+"/baz" {
+				t.Errorf("Property() failure in clone")
+			}
+			// Check that p has not changed
+			if p.String() != test.expected {
+				t.Errorf("Cloning failure: p is altered")
+			}
 		}
 	}
 	if !p.IsRoot() {
