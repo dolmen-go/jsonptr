@@ -73,7 +73,7 @@ func TestPointer(t *testing.T) {
 
 		r, err := Parse(test.expected)
 		if err != nil {
-			t.Error("Can't parse %s", test.expected)
+			t.Errorf("Can't parse %s", test.expected)
 		} else {
 			got = r.String()
 			if got != test.expected {
