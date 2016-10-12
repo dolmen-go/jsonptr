@@ -62,6 +62,16 @@ func (ptr *Pointer) Up() *Pointer {
 	return ptr
 }
 
+func (ptr *Pointer) Pop() string {
+	last := len(*ptr) - 1
+	if last < 0 {
+		panic(ErrRoot)
+	}
+	prop := (*ptr)[last]
+	*ptr = (*ptr)[:last]
+	return prop
+}
+
 func (ptr *Pointer) Property(name string) *Pointer {
 	*ptr = append(*ptr, name)
 	return ptr

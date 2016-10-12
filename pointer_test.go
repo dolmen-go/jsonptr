@@ -71,6 +71,13 @@ func TestPointer(t *testing.T) {
 			t.Error("IsRoot failure")
 		}
 
+		if !p.IsRoot() {
+			got = p.Property(p.Pop()).String()
+			if got != test.expected {
+				t.Fatalf("Pop+Property => got: %s, expected: %s", got, test.expected)
+			}
+		}
+
 		r, err := Parse(test.expected)
 		if err != nil {
 			t.Errorf("Can't parse %s", test.expected)
