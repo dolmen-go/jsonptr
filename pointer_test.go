@@ -107,3 +107,17 @@ func TestPointer(t *testing.T) {
 		t.Fatal("IsRoot failure")
 	}
 }
+
+// TestPointerIn tests Parse() and Pointer.In()
+func TestPointerIn(t *testing.T) {
+	(&getTester{
+		t: t,
+		Get: func(doc interface{}, pointer string) (interface{}, error) {
+			ptr, err := Parse(pointer)
+			if err != nil {
+				return nil, err
+			}
+			return ptr.In(doc)
+		},
+	}).runTest()
+}

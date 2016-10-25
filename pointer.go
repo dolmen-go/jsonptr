@@ -86,3 +86,34 @@ func (ptr *Pointer) Index(index int) *Pointer {
 	}
 	return ptr.Property(prop)
 }
+
+// In returns the value from doc pointed by ptr
+func (ptr Pointer) In(doc interface{}) (interface{}, error) {
+	for i, key := range ptr {
+		switch here := (doc).(type) {
+		case map[string]interface{}:
+			var ok bool
+			if doc, ok = here[key]; !ok {
+				return nil, propertyError(ptr[:i].String())
+			}
+		case []interface{}:
+			n, err := arrayIndex(key)
+			if err != nil {
+				return nil, &PtrError{ptr[:i].String(), err}
+			}
+			if n < 0 || n >= len(here) {
+				return nil, indexError(ptr[:i].String())
+			}
+			doc = here[n]
+		default:
+			// We report the error at the upper level
+			return nil, docError(ptr[:i-1].String(), doc)
+		}
+	}
+	return doc, nil
+}
+
+func (ptr Pointer) Set(pdoc *interface{}, value interface{}) error {
+	// TODO Make an optimised implementation
+	return Set(pdoc, ptr.String(), value)
+}
