@@ -12,7 +12,13 @@ import (
 
 var _ error = (*PtrError)(nil)
 
-func checkGet(t *testing.T, jsonData string, ptr string, expected interface{}) {
+type getTester struct {
+	t   *testing.T
+	Get func(interface{}, string) (interface{}, error)
+}
+
+func (tester *getTester) checkGet(jsonData string, ptr string, expected interface{}) {
+	t := tester.t
 	t.Logf("%v => \"%v\"", jsonData, ptr)
 	var data interface{}
 	if err := json.Unmarshal([]byte(jsonData), &data); err != nil {
@@ -21,7 +27,7 @@ func checkGet(t *testing.T, jsonData string, ptr string, expected interface{}) {
 		return
 	}
 
-	got, err := Get(data, ptr)
+	got, err := tester.Get(data, ptr)
 	if err != nil {
 		t.Logf("  unexpected error: %s\n", err)
 		t.Fail()
@@ -33,7 +39,8 @@ func checkGet(t *testing.T, jsonData string, ptr string, expected interface{}) {
 	}
 }
 
-func TestGet(t *testing.T) {
+func (tester *getTester) runTest() {
+	t := tester.t
 	for _, doc := range []interface{}{
 		"x",
 		1,
@@ -44,7 +51,7 @@ func TestGet(t *testing.T) {
 		[]interface{}{},
 		map[string]interface{}{},
 	} {
-		got, err := Get(doc, "")
+		got, err := tester.Get(doc, "")
 		if err != nil {
 			t.Logf("%T: unexpected error: %s\n", doc, err)
 			t.Fail()
@@ -56,25 +63,32 @@ func TestGet(t *testing.T) {
 		}
 	}
 
-	checkGet(t, `"x"`, ``, "x")
-	checkGet(t, `["x"]`, ``, []interface{}{"x"})
-	checkGet(t, `["a","b"]`, `/0`, "a")
-	checkGet(t, `["a","b"]`, `/1`, "b")
-	checkGet(t, `{"a":"x"}`, `/a`, "x")
-	checkGet(t, `{"":"x"}`, `/`, "x")
-	checkGet(t, `{"~":"x"}`, `/~0`, "x")
-	checkGet(t, `{"/":"y"}`, `/~1`, "y")
-	checkGet(t, `{"~/":"z"}`, `/~0~1`, "z")
-	checkGet(t, `{"/~":"z"}`, `/~1~0`, "z")
-	checkGet(t, `{"~~~":"x"}`, `/~0~0~0`, "x")
-	checkGet(t, `{"~x~":"x"}`, `/~0x~0`, "x")
-	checkGet(t, `{"/~~/":"z"}`, `/~1~0~0~1`, "z")
-	checkGet(t, `{"1éé":"z"}`, `/1éé`, "z")
-	checkGet(t, `{"a":{}}`, `/a`, map[string]interface{}{})
-	checkGet(t, `{"a":[]}`, `/a`, []interface{}{})
-	checkGet(t, `{"a":[1,2]}`, `/a/0`, float64(1))
-	checkGet(t, `{"a":[1,2]}`, `/a/1`, float64(2))
-	checkGet(t, `{"a":[0,1,2,3,4,5,6,7,8,9,"x"]}`, `/a/10`, "x")
+	tester.checkGet(`"x"`, ``, "x")
+	tester.checkGet(`["x"]`, ``, []interface{}{"x"})
+	tester.checkGet(`["a","b"]`, `/0`, "a")
+	tester.checkGet(`["a","b"]`, `/1`, "b")
+	tester.checkGet(`{"a":"x"}`, `/a`, "x")
+	tester.checkGet(`{"":"x"}`, `/`, "x")
+	tester.checkGet(`{"~":"x"}`, `/~0`, "x")
+	tester.checkGet(`{"/":"y"}`, `/~1`, "y")
+	tester.checkGet(`{"~/":"z"}`, `/~0~1`, "z")
+	tester.checkGet(`{"/~":"z"}`, `/~1~0`, "z")
+	tester.checkGet(`{"~~~":"x"}`, `/~0~0~0`, "x")
+	tester.checkGet(`{"~x~":"x"}`, `/~0x~0`, "x")
+	tester.checkGet(`{"/~~/":"z"}`, `/~1~0~0~1`, "z")
+	tester.checkGet(`{"1éé":"z"}`, `/1éé`, "z")
+	tester.checkGet(`{"a":{}}`, `/a`, map[string]interface{}{})
+	tester.checkGet(`{"a":[]}`, `/a`, []interface{}{})
+	tester.checkGet(`{"a":[1,2]}`, `/a/0`, float64(1))
+	tester.checkGet(`{"a":[1,2]}`, `/a/1`, float64(2))
+	tester.checkGet(`{"a":[0,1,2,3,4,5,6,7,8,9,"x"]}`, `/a/10`, "x")
+}
+
+func TestGet(t *testing.T) {
+	(&getTester{
+		t:   t,
+		Get: Get,
+	}).runTest()
 }
 
 func checkSet(t *testing.T, jsonIn string, ptr string, value interface{}, jsonOut string) {
