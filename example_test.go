@@ -21,8 +21,7 @@ func Example() {
    "k\"l": 6,
    " ": 7,
    "m~n": 8
-   }
-`
+}`
 	var doc interface{}
 	_ = json.Unmarshal([]byte(JSON), &doc)
 
