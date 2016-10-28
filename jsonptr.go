@@ -6,6 +6,8 @@
 //
 // Any part of a data tree made of []interface{} or map[string]interface{}
 // can be dereferenced with a JSON Pointer.
+//
+// Specification: https://tools.ietf.org/html/rfc6901
 package jsonptr
 
 import (
@@ -51,9 +53,9 @@ func arrayIndex(token string) (int, error) {
 	return n, nil
 }
 
-// Get extracts a value from a JSON-like data tree
+// Get extracts a value from a JSON-like data tree.
 //
-// In case of error a PtrError is returned
+// In case of error a PtrError is returned.
 func Get(doc interface{}, ptr string) (interface{}, error) {
 	if len(ptr) == 0 {
 		return doc, nil
@@ -102,9 +104,9 @@ func Get(doc interface{}, ptr string) (interface{}, error) {
 	return doc, nil
 }
 
-// Set modifies a JSON-like data tree
+// Set modifies a JSON-like data tree.
 //
-// In case of error a PtrError is returned
+// In case of error a PtrError is returned.
 func Set(doc *interface{}, ptr string, value interface{}) error {
 	if len(ptr) == 0 {
 		*doc = value
