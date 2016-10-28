@@ -108,6 +108,22 @@ func TestPointer(t *testing.T) {
 	}
 }
 
+func ExamplePointer() {
+	for _, parts := range [][]string{
+		nil,
+		{},
+		{"a", "b"},
+		{"a~/b"},
+	} {
+		fmt.Printf("%q\n", Pointer(parts).String())
+	}
+	// Output:
+	// ""
+	// ""
+	// "/a/b"
+	// "/a~0~1b"
+}
+
 // TestPointerIn tests Parse() and Pointer.In()
 func TestPointerIn(t *testing.T) {
 	(&getTester{
