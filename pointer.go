@@ -1,7 +1,6 @@
 package jsonptr
 
 import (
-	"errors"
 	"strconv"
 	"strings"
 )
@@ -51,8 +50,6 @@ func (ptr Pointer) Clone() Pointer {
 func (ptr Pointer) IsRoot() bool {
 	return len(ptr) == 0
 }
-
-var ErrRoot = errors.New("Can't go up from root")
 
 func (ptr *Pointer) Up() *Pointer {
 	if ptr.IsRoot() {

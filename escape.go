@@ -40,8 +40,6 @@ func EscapeString(name string) string {
 	return string(b)
 }
 
-var ErrUsage = stringError("invalid use of json.UnescapeString on string with '/'")
-
 // Unescape unescapes a property name:
 //  `~1` => '/'
 //  `~0` => '~'
