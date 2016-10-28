@@ -2,7 +2,10 @@
 // Use of this source code is governed by the Apache 2.0 license that
 // can be found in the LICENSE file.
 
-// Package jsonptr implements JSON Pointer (RFC 6901) lookup
+// Package jsonptr implements JSON Pointer (RFC 6901) lookup. Fast and strong testsuite.
+//
+// Any part of a data tree made of []interface{} or map[string]interface{}
+// can be dereferenced with a JSON Pointer.
 package jsonptr
 
 import (
