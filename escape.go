@@ -2,9 +2,9 @@ package jsonptr
 
 import "strings"
 
-// EscapeString a property name with JSON Pointer escapes:
-// "~" => "~0",
-// "/" => "~1"
+// EscapeString escapes a property name with JSON Pointer escapes:
+//  '~' => `~0`
+//  '/' => `~1`
 func EscapeString(name string) string {
 	var shift int
 	for i := len(name) - 1; i >= 0; i-- {
@@ -40,11 +40,11 @@ func EscapeString(name string) string {
 	return string(b)
 }
 
-// Unescape unescapes a property name:
+// UnescapeString unescapes a property name:
 //  `~1` => '/'
 //  `~0` => '~'
-// Any '~' followed by something else (or nothing) is an error ErrSyntax
-// Any '/' is an error ErrUsage
+// Any '~' followed by something else (or nothing) is an error ErrSyntax.
+// Any '/' may be reported as an error ErrUsage.
 func UnescapeString(token string) (string, error) {
 	p := strings.IndexByte(token, '~')
 	if p == -1 {
