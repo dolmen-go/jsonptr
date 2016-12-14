@@ -2,15 +2,17 @@
 // Use of this source code is governed by the Apache 2.0 license that
 // can be found in the LICENSE file.
 
-package jsonptr
+package jsonptr_test
 
 import (
 	"encoding/json"
 	"reflect"
 	"testing"
+
+	"github.com/dolmen-go/jsonptr"
 )
 
-var _ error = (*PtrError)(nil)
+var _ error = (*jsonptr.PtrError)(nil)
 
 type getTester struct {
 	t   *testing.T
@@ -87,7 +89,7 @@ func (tester *getTester) runTest() {
 func TestGet(t *testing.T) {
 	(&getTester{
 		t:   t,
-		Get: Get,
+		Get: jsonptr.Get,
 	}).runTest()
 }
 
@@ -100,7 +102,7 @@ func checkSet(t *testing.T, jsonIn string, ptr string, value interface{}, jsonOu
 		return
 	}
 
-	err := Set(&data, ptr, value)
+	err := jsonptr.Set(&data, ptr, value)
 	if err != nil {
 		t.Logf("  unexpected error: %s\n", err)
 		t.Fail()

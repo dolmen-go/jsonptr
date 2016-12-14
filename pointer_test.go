@@ -1,14 +1,16 @@
-package jsonptr
+package jsonptr_test
 
 import (
 	"fmt"
 	"testing"
+
+	"github.com/dolmen-go/jsonptr"
 )
 
-var _ fmt.Stringer = Pointer{}
+var _ fmt.Stringer = jsonptr.Pointer{}
 
 func TestPointer(t *testing.T) {
-	var p Pointer
+	var p jsonptr.Pointer
 	if !p.IsRoot() {
 		t.Fatal("Empty must give a root pointer")
 	}
@@ -20,16 +22,16 @@ func TestPointer(t *testing.T) {
 	var (
 		up = p.Up
 
-		property = func(name string) func() *Pointer {
-			return func() *Pointer { return p.Property(name) }
+		property = func(name string) func() *jsonptr.Pointer {
+			return func() *jsonptr.Pointer { return p.Property(name) }
 		}
 
-		index = func(i int) func() *Pointer {
-			return func() *Pointer { return p.Index(i) }
+		index = func(i int) func() *jsonptr.Pointer {
+			return func() *jsonptr.Pointer { return p.Index(i) }
 		}
 
-		chain = func(moves ...func() *Pointer) func() *Pointer {
-			return func() *Pointer {
+		chain = func(moves ...func() *jsonptr.Pointer) func() *jsonptr.Pointer {
+			return func() *jsonptr.Pointer {
 				q := &p
 				for _, m := range moves {
 					q = m()
@@ -40,7 +42,7 @@ func TestPointer(t *testing.T) {
 	)
 
 	for _, test := range []struct {
-		move     func() *Pointer
+		move     func() *jsonptr.Pointer
 		expected string
 	}{
 		{property("foo"), "/foo"},
@@ -78,7 +80,7 @@ func TestPointer(t *testing.T) {
 			}
 		}
 
-		r, err := Parse(test.expected)
+		r, err := jsonptr.Parse(test.expected)
 		if err != nil {
 			t.Errorf("Can't parse %s", test.expected)
 		} else {
@@ -115,7 +117,7 @@ func ExamplePointer() {
 		{"a", "b"},
 		{"a~/b"},
 	} {
-		fmt.Printf("%q\n", Pointer(parts).String())
+		fmt.Printf("%q\n", jsonptr.Pointer(parts).String())
 	}
 	// Output:
 	// ""
@@ -129,7 +131,7 @@ func TestPointerIn(t *testing.T) {
 	(&getTester{
 		t: t,
 		Get: func(doc interface{}, pointer string) (interface{}, error) {
-			ptr, err := Parse(pointer)
+			ptr, err := jsonptr.Parse(pointer)
 			if err != nil {
 				return nil, err
 			}
