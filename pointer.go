@@ -51,7 +51,7 @@ func (ptr Pointer) String() string {
 
 // Clone returns a new, independant, copy of the pointer.
 func (ptr Pointer) Clone() Pointer {
-	return ptr[:]
+	return append(Pointer{}, ptr...)
 }
 
 func (ptr Pointer) IsRoot() bool {

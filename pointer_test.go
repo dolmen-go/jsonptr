@@ -150,6 +150,18 @@ func ExamplePointer_navigation() {
 	// "/foo/3/c~0d"
 }
 
+func TestPointerClone(t *testing.T) {
+	orig := jsonptr.Pointer{"foo"}
+	clone := orig.Clone()
+	if clone.String() != "/foo" {
+		t.Errorf("Failure!")
+	}
+	orig.Up().Property("bar")
+	if clone.String() != "/foo" {
+		t.Errorf("Failure!")
+	}
+}
+
 // TestPointerIn tests Parse() and Pointer.In()
 func TestPointerIn(t *testing.T) {
 	(&getTester{
