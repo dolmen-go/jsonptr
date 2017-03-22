@@ -5,9 +5,13 @@ import (
 	"strings"
 )
 
-// Pointer represents a mutable parsed JSON Pointer
+// Pointer represents a mutable parsed JSON Pointer.
+//
+// The Go representation is a array of non-encoded path elements. This
+// allows to use type conversion from/to a []string.
 type Pointer []string
 
+// Parse parses a JSON pointer from its text representation
 func Parse(pointer string) (Pointer, error) {
 	if pointer == "" {
 		return Pointer(nil), nil
@@ -25,6 +29,8 @@ func Parse(pointer string) (Pointer, error) {
 	return Pointer(ptr), nil
 }
 
+// String returns a JSON Pointer string, escaping components when necessary:
+// '~' is replaced by "~0", '/' by "~1"
 func (ptr Pointer) String() string {
 	if len(ptr) == 0 {
 		return ""
@@ -43,6 +49,7 @@ func (ptr Pointer) String() string {
 	return "/" + strings.Join(ptr, "/")
 }
 
+// Clone returns a new, independant, copy of the pointer.
 func (ptr Pointer) Clone() Pointer {
 	return ptr[:]
 }
@@ -51,6 +58,9 @@ func (ptr Pointer) IsRoot() bool {
 	return len(ptr) == 0
 }
 
+// Up removes the last element of the pointer.
+//
+// Panics if already at root.
 func (ptr *Pointer) Up() *Pointer {
 	if ptr.IsRoot() {
 		panic(ErrRoot)

@@ -110,20 +110,44 @@ func TestPointer(t *testing.T) {
 	}
 }
 
-func ExamplePointer() {
-	for _, parts := range [][]string{
+func ExamplePointer_conversion() {
+	fmt.Printf("%q\n\n", jsonptr.Pointer{"foo", "bar", "a/b", "x~y"})
+
+	for _, ptr := range []jsonptr.Pointer{
 		nil,
 		{},
 		{"a", "b"},
 		{"a~/b"},
 	} {
-		fmt.Printf("%q\n", jsonptr.Pointer(parts).String())
+		fmt.Printf("%q\n", ptr.String())
 	}
 	// Output:
+	// "/foo/bar/a~1b/x~0y"
+	//
 	// ""
 	// ""
 	// "/a/b"
 	// "/a~0~1b"
+}
+
+func ExamplePointer_navigation() {
+	ptr := jsonptr.Pointer{}
+	fmt.Printf("%q\n", ptr)
+
+	ptr.Property("foo").Index(3).Property("a/b")
+	fmt.Printf("%q\n", ptr.String())
+
+	ptr.Up()
+	fmt.Printf("%q\n", ptr)
+
+	ptr.Property("c~d")
+	fmt.Printf("%q\n", ptr)
+
+	// Output:
+	// ""
+	// "/foo/3/a~1b"
+	// "/foo/3"
+	// "/foo/3/c~0d"
 }
 
 // TestPointerIn tests Parse() and Pointer.In()
