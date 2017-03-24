@@ -1,9 +1,34 @@
-package jsonptr
+package jsonptr_test
 
 import (
+	"fmt"
 	"strings"
 	"testing"
+
+	"github.com/dolmen-go/jsonptr"
 )
+
+func ExampleEscapeString() {
+	fmt.Println(jsonptr.EscapeString("a~b c/d"))
+	// Output:
+	// a~0b c~1d
+}
+
+func ExampleUnescapeString() {
+	s, _ := jsonptr.UnescapeString("a~0b c~1d")
+	fmt.Println(s)
+	// Output:
+	// a~b c/d
+}
+
+func ExampleUnescapeString_error() {
+	_, err := jsonptr.UnescapeString("a~x")
+	fmt.Println("jsonptr.ErrSyntax?", err == jsonptr.ErrSyntax)
+	fmt.Println(err)
+	// Output:
+	// jsonptr.ErrSyntax? true
+	// invalid JSON pointer
+}
 
 func TestEscape(t *testing.T) {
 	for _, tc := range []struct {
@@ -27,7 +52,7 @@ func TestEscape(t *testing.T) {
 		{"~é", "~0é"},
 	} {
 		t.Logf("%#v => %#v\n", tc.in, tc.expected)
-		got := EscapeString(tc.in)
+		got := jsonptr.EscapeString(tc.in)
 		if got != tc.expected {
 			t.Errorf("got: %#v\n", got)
 		}
@@ -61,7 +86,7 @@ var escapeBenchmarkCases = []string{
 }
 
 func BenchmarkEscape(b *testing.B) {
-	benchmarkEscape(b, EscapeString, escapeBenchmarkCases)
+	benchmarkEscape(b, jsonptr.EscapeString, escapeBenchmarkCases)
 }
 
 func BenchmarkEscapeWithReplacer(b *testing.B) {
@@ -81,16 +106,16 @@ func TestUnescape(t *testing.T) {
 		{"~1~0", "/~", nil},
 		{"x~1~0", "x/~", nil},
 		{"x~1y~0", "x/y~", nil},
-		{"~", "", ErrSyntax},
-		{"~~", "", ErrSyntax},
-		{"~a", "", ErrSyntax},
-		{"~a ", "", ErrSyntax},
-		{"a ~", "", ErrSyntax},
-		{"a ~ x", "", ErrSyntax},
-		{"a ~0 ~x", "", ErrSyntax},
+		{"~", "", jsonptr.ErrSyntax},
+		{"~~", "", jsonptr.ErrSyntax},
+		{"~a", "", jsonptr.ErrSyntax},
+		{"~a ", "", jsonptr.ErrSyntax},
+		{"a ~", "", jsonptr.ErrSyntax},
+		{"a ~ x", "", jsonptr.ErrSyntax},
+		{"a ~0 ~x", "", jsonptr.ErrSyntax},
 	} {
 		t.Logf("%s => %s", test.in, test.out)
-		got, err := UnescapeString(test.in)
+		got, err := jsonptr.UnescapeString(test.in)
 		if err != test.err {
 			t.Logf("got: %s, expected: %s", err, test.err)
 			t.Fail()
