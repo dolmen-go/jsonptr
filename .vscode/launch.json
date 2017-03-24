@@ -1,0 +1,36 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "All tests",
+            "type": "go",
+            "request": "launch",
+            "mode": "test",
+            "program": "${workspaceRoot}"
+        },
+        {
+            "name": "test: Escape",
+            "type": "go",
+            "request": "launch",
+            "mode": "test",
+            "program": "${workspaceRoot}",
+            "args": [
+                "-test.v",
+                "-test.run",
+                "TestEscape"
+            ]
+        },
+        {
+            "name": "test: Unescape",
+            "type": "go",
+            "request": "launch",
+            "mode": "test",
+            "program": "${workspaceRoot}",
+            "args": [
+                "-test.v",
+                "-test.run",
+                "TestUnescape"
+            ]
+        }
+    ]
+}
