@@ -7,7 +7,7 @@ import "strings"
 //  '/' => `~1`
 func EscapeString(name string) string {
 	var shift int
-	for i := len(name) - 1; i >= 0; i-- {
+	for i := 0; i < len(name); i++ {
 		switch name[i] {
 		case '~', '/':
 			shift++
