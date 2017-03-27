@@ -11,7 +11,7 @@ import (
 // allows to use type conversion from/to a []string.
 type Pointer []string
 
-// Parse parses a JSON pointer from its text representation
+// Parse parses a JSON pointer from its text representation.
 func Parse(pointer string) (Pointer, error) {
 	if pointer == "" {
 		return Pointer(nil), nil
@@ -54,11 +54,13 @@ func (ptr Pointer) Clone() Pointer {
 	return append(Pointer{}, ptr...)
 }
 
+// IsRoot returns true if the pointer is at root (empty).
 func (ptr Pointer) IsRoot() bool {
 	return len(ptr) == 0
 }
 
 // Up removes the last element of the pointer.
+// The pointer is returned for chaining.
 //
 // Panics if already at root.
 func (ptr *Pointer) Up() *Pointer {
@@ -69,6 +71,9 @@ func (ptr *Pointer) Up() *Pointer {
 	return ptr
 }
 
+// Pop removes the last element of the pointer and returns it.
+//
+// Panics if already at root.
 func (ptr *Pointer) Pop() string {
 	last := len(*ptr) - 1
 	if last < 0 {
@@ -79,11 +84,15 @@ func (ptr *Pointer) Pop() string {
 	return prop
 }
 
+// Property moves the pointer deeper, following a property name.
+// The pointer is returned for chaining.
 func (ptr *Pointer) Property(name string) *Pointer {
 	*ptr = append(*ptr, name)
 	return ptr
 }
 
+// Index moves the pointer deeper, following an array index.
+// The pointer is returned for chaining.
 func (ptr *Pointer) Index(index int) *Pointer {
 	var prop string
 	if index < 0 {
@@ -94,7 +103,7 @@ func (ptr *Pointer) Index(index int) *Pointer {
 	return ptr.Property(prop)
 }
 
-// In returns the value from doc pointed by ptr
+// In returns the value from doc pointed by ptr.
 func (ptr Pointer) In(doc interface{}) (interface{}, error) {
 	for i, key := range ptr {
 		switch here := (doc).(type) {
@@ -120,6 +129,7 @@ func (ptr Pointer) In(doc interface{}) (interface{}, error) {
 	return doc, nil
 }
 
+// Set changes a value in document pdoc at location pointed by ptr.
 func (ptr Pointer) Set(pdoc *interface{}, value interface{}) error {
 	// TODO Make an optimised implementation
 	return Set(pdoc, ptr.String(), value)
