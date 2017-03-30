@@ -36,17 +36,11 @@ func (ptr Pointer) String() string {
 		return ""
 	}
 
-	for i, part := range ptr {
-		if strings.ContainsAny(part, "~/") {
-			escaped := make([]string, len(ptr))
-			copy(escaped, ptr[:i])
-			for j := i; j < len(ptr); j++ {
-				escaped[j] = EscapeString(ptr[j])
-			}
-			return "/" + strings.Join(escaped, "/")
-		}
+	dst := make([]byte, 0, 8*len(ptr))
+	for _, part := range ptr {
+		dst = AppendEscape(append(dst, '/'), part)
 	}
-	return "/" + strings.Join(ptr, "/")
+	return string(dst)
 }
 
 // Clone returns a new, independant, copy of the pointer.
