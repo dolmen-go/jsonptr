@@ -108,6 +108,8 @@ func TestUnescape(t *testing.T) {
 		{"x~1y~0", "x/y~", nil},
 		{"~", "", jsonptr.ErrSyntax},
 		{"~~", "", jsonptr.ErrSyntax},
+		{"~1~", "", jsonptr.ErrSyntax},
+		{"~0~", "", jsonptr.ErrSyntax},
 		{"~a", "", jsonptr.ErrSyntax},
 		{"~a ", "", jsonptr.ErrSyntax},
 		{"a ~", "", jsonptr.ErrSyntax},
