@@ -31,6 +31,21 @@ func ExampleUnescapeString_error() {
 }
 
 func TestEscape(t *testing.T) {
+	buffers := [][]byte{
+		nil,
+		[]byte{},
+		make([]byte, 0, 1),
+		make([]byte, 0, 2),
+		make([]byte, 0, 3),
+		make([]byte, 0, 4),
+		make([]byte, 0, 5),
+		make([]byte, 0, 6),
+		make([]byte, 0, 7),
+		make([]byte, 0, 8),
+		make([]byte, 0, 9),
+		make([]byte, 0, 10),
+		make([]byte, 0, 11),
+	}
 	for _, tc := range []struct {
 		in, expected string
 	}{
@@ -57,9 +72,12 @@ func TestEscape(t *testing.T) {
 			t.Errorf("EscapeString got: %q\n", got)
 		}
 
-		buf := jsonptr.AppendEscape(nil, tc.in)
-		if string(buf) != tc.expected {
-			t.Errorf("AppendEscape got: %q\n", buf)
+		for _, in := range buffers {
+			out := jsonptr.AppendEscape(in[:0], tc.in)
+			t.Logf("cap=%d => cap=%d", cap(in), cap(out))
+			if string(out) != tc.expected {
+				t.Errorf("AppendEscape cap=%d got: %q\n", cap(in), out)
+			}
 		}
 	}
 }
