@@ -2,6 +2,56 @@ package jsonptr
 
 import "strings"
 
+// AppendEscape appends the escaped name to dst and returns it.
+// The buffer grows (and so is reallocated) if necessary.
+func AppendEscape(dst []byte, name string) []byte {
+	if len(name) == 0 {
+		return dst
+	}
+
+	var shift int
+	for i := 0; i < len(name); i++ {
+		switch name[i] {
+		case '~', '/':
+			shift++
+		}
+	}
+	if shift == 0 {
+		return append(dst, name...)
+	}
+
+	var result []byte
+	if cap(dst) >= len(dst)+len(name)+shift {
+		result = dst[0 : len(dst)+len(name)+shift]
+	} else {
+		result = make([]byte, len(dst)+len(name)+shift)
+		copy(result, dst)
+	}
+	b := result[len(dst):]
+
+	for i := len(name) - 1; i >= 0; i-- {
+		switch name[i] {
+		case '~':
+			b[i+shift] = '0'
+		case '/':
+			b[i+shift] = '1'
+		default:
+			b[i+shift] = name[i]
+			continue
+		}
+		shift--
+		b[i+shift] = '~'
+		if shift == 0 {
+			if i > 0 {
+				copy(b[:i], name[:i])
+			}
+			break
+		}
+	}
+
+	return result
+}
+
 // EscapeString escapes a property name with JSON Pointer escapes:
 //  '~' => `~0`
 //  '/' => `~1`

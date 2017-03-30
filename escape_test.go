@@ -54,7 +54,12 @@ func TestEscape(t *testing.T) {
 		t.Logf("%#v => %#v\n", tc.in, tc.expected)
 		got := jsonptr.EscapeString(tc.in)
 		if got != tc.expected {
-			t.Errorf("got: %#v\n", got)
+			t.Errorf("EscapeString got: %q\n", got)
+		}
+
+		buf := jsonptr.AppendEscape(nil, tc.in)
+		if string(buf) != tc.expected {
+			t.Errorf("AppendEscape got: %q\n", buf)
 		}
 	}
 }
