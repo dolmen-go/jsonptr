@@ -152,5 +152,22 @@ func TestUnescape(t *testing.T) {
 			t.Logf("got: %s, expected: %s", got, test.out)
 			t.Fail()
 		}
+
+		in := []byte(test.in)
+		out, err := jsonptr.Unescape(in)
+		if strings.Count(test.in, "/") != 0 {
+			if len(out) != 0 {
+				t.Errorf("got: %q, expected: \"\"", out)
+			}
+			if err != jsonptr.ErrUsage {
+				t.Errorf("got: %q, expected: %q", err, jsonptr.ErrUsage)
+			}
+		} else {
+			if err != test.err {
+				t.Errorf("got: %q, expected: %q", err, test.err)
+			} else if err == nil && string(out) != test.out {
+				t.Errorf("got: %q, expected: %q", out, test.out)
+			}
+		}
 	}
 }

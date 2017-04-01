@@ -90,6 +90,57 @@ func EscapeString(name string) string {
 	return string(b)
 }
 
+// Unescape unescapes a property name in place:
+//  `~1` => '/'
+//  `~0` => '~'
+// Any '~' followed by something else (or nothing) is an error ErrSyntax.
+// Any '/' is an error ErrSyntax.
+func Unescape(b []byte) ([]byte, error) {
+	q := -1
+Loop:
+	for p := 0; p < len(b); p++ {
+		switch b[p] {
+		case '~':
+			q = p
+			break Loop
+		case '/':
+			return nil, ErrUsage
+		}
+	}
+
+	// Nothing to replace
+	if q == -1 {
+		return b, nil
+	}
+
+	if b[len(b)-1] == '~' {
+		return nil, ErrSyntax
+	}
+
+	p := q
+	for q := p; q < len(b); q++ {
+		switch b[q] {
+		case '~':
+			q++
+			switch b[q] {
+			case '0':
+				b[p] = '~'
+			case '1':
+				b[p] = '/'
+			default:
+				return nil, ErrSyntax
+			}
+		case '/':
+			return nil, ErrUsage
+		default:
+			// Move byte
+			b[p] = b[q]
+		}
+		p++
+	}
+	return b[:p], nil
+}
+
 // UnescapeString unescapes a property name:
 //  `~1` => '/'
 //  `~0` => '~'
