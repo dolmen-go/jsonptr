@@ -76,6 +76,10 @@ func SimpleParse(pointer string) (jsonptr.Pointer, error) {
 		return nil, jsonptr.ErrSyntax
 	}
 	ptr := strings.Split(pointer[1:], "/")
+	// Optimize for the common case
+	if strings.IndexByte(pointer, '~') == -1 {
+		return ptr, nil
+	}
 	for i, part := range ptr {
 		var err error
 		if ptr[i], err = jsonptr.UnescapeString(part); err != nil {
