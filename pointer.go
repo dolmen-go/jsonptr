@@ -23,11 +23,16 @@ func Parse(pointer string) (Pointer, error) {
 	p := 1
 	i := 0
 	for {
-		q := strings.IndexByte(pointer[p:], '~')
-		if q == -1 {
+		q := p
+		for q < len(pointer) {
+			if pointer[q] == '~' {
+				break
+			}
+			q++
+		}
+		if q == len(pointer) {
 			break
 		}
-		q += p
 		for p+len(ptr[i]) < q {
 			i++
 			p += len(ptr) + 1
