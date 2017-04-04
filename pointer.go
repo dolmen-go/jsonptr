@@ -20,13 +20,29 @@ func Parse(pointer string) (Pointer, error) {
 		return Pointer(nil), ErrSyntax
 	}
 	ptr := strings.Split(pointer[1:], "/")
-	for i, part := range ptr {
+	p := 1
+	i := 0
+	for {
+		q := strings.IndexByte(pointer[p:], '~')
+		if q == -1 {
+			break
+		}
+		q += p
+		for p+len(ptr[i]) < q {
+			i++
+			p += len(ptr) + 1
+		}
 		var err error
-		if ptr[i], err = UnescapeString(part); err != nil {
-			return Pointer(nil), err
+		ptr[i], err = UnescapeString(ptr[i])
+		if err != nil {
+			return nil, err
+		}
+		i++
+		if i == len(ptr) {
+			break
 		}
 	}
-	return Pointer(ptr), nil
+	return ptr, nil
 }
 
 // String returns a JSON Pointer string, escaping components when necessary:
