@@ -9,6 +9,59 @@ import (
 
 var _ fmt.Stringer = jsonptr.Pointer{}
 
+func TestPointerParse(t *testing.T) {
+	for _, test := range []struct {
+		in  string
+		out jsonptr.Pointer
+		err error
+	}{
+		{"", nil, nil},
+		{"a", nil, jsonptr.ErrSyntax},
+		{"~", nil, jsonptr.ErrSyntax},
+		{"/", jsonptr.Pointer{""}, nil},
+		{"/a", jsonptr.Pointer{"a"}, nil},
+		{"/~", nil, jsonptr.ErrSyntax},
+		{"/~x", nil, jsonptr.ErrSyntax},
+		{"/a~", nil, jsonptr.ErrSyntax},
+		{"/a~x", nil, jsonptr.ErrSyntax},
+		{"/abc/~", nil, jsonptr.ErrSyntax},
+		{"/abc/~x", nil, jsonptr.ErrSyntax},
+		{"/abc/a~", nil, jsonptr.ErrSyntax},
+		{"/~0", jsonptr.Pointer{"~"}, nil},
+		{"/~1", jsonptr.Pointer{"/"}, nil},
+		{"/~0~0", jsonptr.Pointer{"~~"}, nil},
+		{"/~0~1", jsonptr.Pointer{"~/"}, nil},
+		{"/~1~0", jsonptr.Pointer{"/~"}, nil},
+		{"/~1~1", jsonptr.Pointer{"//"}, nil},
+		{"/abc/def~0/ghi", jsonptr.Pointer{"abc", "def~", "ghi"}, nil},
+		{"/abc/def~0/g~1hi", jsonptr.Pointer{"abc", "def~", "g/hi"}, nil},
+	} {
+		if test.err != nil {
+			t.Logf("%q => %s", test.in, test.err)
+		} else {
+			t.Logf("%q => %#v", test.in, test.out)
+		}
+
+		out, err := jsonptr.Parse(test.in)
+		if err != test.err {
+			t.Errorf("got error: %q", err)
+		} else if (out == nil) != (test.out == nil) || len(out) != len(test.out) {
+			t.Errorf("got %#v", out)
+		} else if err == nil {
+			for i, part := range out {
+				if part != test.out[i] {
+					t.Errorf("got %#v", out)
+					break
+				}
+			}
+			ptr := out.String()
+			if ptr != test.in {
+				t.Errorf("roundtrip failure: got %q != %q", ptr, test.in)
+			}
+		}
+	}
+}
+
 func TestPointer(t *testing.T) {
 	var p jsonptr.Pointer
 	if !p.IsRoot() {
