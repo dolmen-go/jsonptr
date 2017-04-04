@@ -35,6 +35,8 @@ var parseTests = [...]struct {
 	{"/~1~1", jsonptr.Pointer{"//"}, nil},
 	{"/abc/def~0/ghi", jsonptr.Pointer{"abc", "def~", "ghi"}, nil},
 	{"/abc/def~0/g~1hi", jsonptr.Pointer{"abc", "def~", "g/hi"}, nil},
+	// Real test cases
+	{"/definitions/Location", jsonptr.Pointer{"definitions", "Location"}, nil},
 }
 
 func TestPointerParse(t *testing.T) {
@@ -65,8 +67,8 @@ func TestPointerParse(t *testing.T) {
 	}
 }
 
-// simpleParse is the original, simple implementation of Parse
-func simpleParse(pointer string) (jsonptr.Pointer, error) {
+// SimpleParse is the original, simple implementation of Parse
+func SimpleParse(pointer string) (jsonptr.Pointer, error) {
 	if pointer == "" {
 		return nil, nil
 	}
@@ -88,7 +90,7 @@ func BenchmarkParse(b *testing.B) {
 		name  string
 		parse func(string) (jsonptr.Pointer, error)
 	}{
-		{"simpleParse", simpleParse},
+		{"simpleParse", SimpleParse},
 		{"jsonptr.Parse", jsonptr.Parse},
 	}
 	for _, test := range parseTests {
