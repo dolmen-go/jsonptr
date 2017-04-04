@@ -19,6 +19,7 @@ var parseTests = [...]struct {
 	{"a", nil, jsonptr.ErrSyntax},
 	{"~", nil, jsonptr.ErrSyntax},
 	{"/", jsonptr.Pointer{""}, nil},
+	{"////", jsonptr.Pointer{"", "", "", ""}, nil},
 	{"/a", jsonptr.Pointer{"a"}, nil},
 	{"/~", nil, jsonptr.ErrSyntax},
 	{"/~x", nil, jsonptr.ErrSyntax},
@@ -37,6 +38,8 @@ var parseTests = [...]struct {
 	{"/abc/def~0/g~1hi", jsonptr.Pointer{"abc", "def~", "g/hi"}, nil},
 	// Real test cases
 	{"/definitions/Location", jsonptr.Pointer{"definitions", "Location"}, nil},
+	{"/paths/~1home~1dolmen", jsonptr.Pointer{"paths", "/home/dolmen"}, nil},
+	{"/paths/~0dolmen", jsonptr.Pointer{"paths", "~dolmen"}, nil},
 }
 
 func TestPointerParse(t *testing.T) {
