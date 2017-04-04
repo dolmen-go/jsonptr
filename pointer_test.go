@@ -2,6 +2,7 @@ package jsonptr_test
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/dolmen-go/jsonptr"
@@ -60,6 +61,46 @@ func TestPointerParse(t *testing.T) {
 			if ptr != test.in {
 				t.Errorf("roundtrip failure: got %q != %q", ptr, test.in)
 			}
+		}
+	}
+}
+
+// simpleParse is the original, simple implementation of Parse
+func simpleParse(pointer string) (jsonptr.Pointer, error) {
+	if pointer == "" {
+		return nil, nil
+	}
+	if pointer[0] != '/' {
+		return nil, jsonptr.ErrSyntax
+	}
+	ptr := strings.Split(pointer[1:], "/")
+	for i, part := range ptr {
+		var err error
+		if ptr[i], err = jsonptr.UnescapeString(part); err != nil {
+			return nil, err
+		}
+	}
+	return ptr, nil
+}
+
+func BenchmarkParse(b *testing.B) {
+	implementations := [...]struct {
+		name  string
+		parse func(string) (jsonptr.Pointer, error)
+	}{
+		{"simpleParse", simpleParse},
+		{"jsonptr.Parse", jsonptr.Parse},
+	}
+	for _, test := range parseTests {
+		for _, impl := range implementations {
+			b.Run(fmt.Sprintf("%q/%s", test.in, impl.name), func(b *testing.B) {
+				parse := impl.parse
+				ptr := test.in
+				b.ResetTimer()
+				for i := 0; i < b.N; i++ {
+					_, _ = parse(ptr)
+				}
+			})
 		}
 	}
 }
