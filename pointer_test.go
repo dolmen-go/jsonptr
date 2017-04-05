@@ -70,8 +70,10 @@ func TestPointerParse(t *testing.T) {
 	}
 }
 
-// SimpleParse is the original, simple implementation of Parse
-func SimpleParse(pointer string) (jsonptr.Pointer, error) {
+// AlternateParse is another implementation of Parse that aimed
+// to be faster, but isn't for the most common case (no escape)
+// See BenchmarkParse for comparison.
+func AltParse(pointer string) (jsonptr.Pointer, error) {
 	if pointer == "" {
 		return nil, nil
 	}
@@ -79,14 +81,31 @@ func SimpleParse(pointer string) (jsonptr.Pointer, error) {
 		return nil, jsonptr.ErrSyntax
 	}
 	ptr := strings.Split(pointer[1:], "/")
-	// Optimize for the common case
-	if strings.IndexByte(pointer, '~') == -1 {
-		return ptr, nil
-	}
-	for i, part := range ptr {
+	p := 1
+	i := 0
+	for {
+		q := p
+		for q < len(pointer) {
+			if pointer[q] == '~' {
+				break
+			}
+			q++
+		}
+		if q == len(pointer) {
+			break
+		}
+		for p+len(ptr[i]) < q {
+			i++
+			p += len(ptr) + 1
+		}
 		var err error
-		if ptr[i], err = jsonptr.UnescapeString(part); err != nil {
+		ptr[i], err = jsonptr.UnescapeString(ptr[i])
+		if err != nil {
 			return nil, err
+		}
+		i++
+		if i == len(ptr) {
+			break
 		}
 	}
 	return ptr, nil
@@ -97,8 +116,8 @@ func BenchmarkParse(b *testing.B) {
 		name  string
 		parse func(string) (jsonptr.Pointer, error)
 	}{
-		{"simpleParse", SimpleParse},
 		{"jsonptr.Parse", jsonptr.Parse},
+		{"AltParse", AltParse},
 	}
 	for _, test := range parseTests {
 		for _, impl := range implementations {

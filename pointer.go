@@ -14,37 +14,20 @@ type Pointer []string
 // Parse parses a JSON pointer from its text representation.
 func Parse(pointer string) (Pointer, error) {
 	if pointer == "" {
-		return Pointer(nil), nil
+		return nil, nil
 	}
 	if pointer[0] != '/' {
-		return Pointer(nil), ErrSyntax
+		return nil, ErrSyntax
 	}
 	ptr := strings.Split(pointer[1:], "/")
-	p := 1
-	i := 0
-	for {
-		q := p
-		for q < len(pointer) {
-			if pointer[q] == '~' {
-				break
-			}
-			q++
-		}
-		if q == len(pointer) {
-			break
-		}
-		for p+len(ptr[i]) < q {
-			i++
-			p += len(ptr) + 1
-		}
+	// Optimize for the common case
+	if strings.IndexByte(pointer, '~') == -1 {
+		return ptr, nil
+	}
+	for i, part := range ptr {
 		var err error
-		ptr[i], err = UnescapeString(ptr[i])
-		if err != nil {
+		if ptr[i], err = UnescapeString(part); err != nil {
 			return nil, err
-		}
-		i++
-		if i == len(ptr) {
-			break
 		}
 	}
 	return ptr, nil
