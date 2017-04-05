@@ -19,6 +19,7 @@ var parseTests = [...]struct {
 	{"a", nil, jsonptr.ErrSyntax},
 	{"~", nil, jsonptr.ErrSyntax},
 	{"/", jsonptr.Pointer{""}, nil},
+	{"////", jsonptr.Pointer{"", "", "", ""}, nil},
 	{"/a", jsonptr.Pointer{"a"}, nil},
 	{"/~", nil, jsonptr.ErrSyntax},
 	{"/~x", nil, jsonptr.ErrSyntax},
@@ -35,6 +36,10 @@ var parseTests = [...]struct {
 	{"/~1~1", jsonptr.Pointer{"//"}, nil},
 	{"/abc/def~0/ghi", jsonptr.Pointer{"abc", "def~", "ghi"}, nil},
 	{"/abc/def~0/g~1hi", jsonptr.Pointer{"abc", "def~", "g/hi"}, nil},
+	// Real test cases
+	{"/definitions/Location", jsonptr.Pointer{"definitions", "Location"}, nil},
+	{"/paths/~1home~1dolmen", jsonptr.Pointer{"paths", "/home/dolmen"}, nil},
+	{"/paths/~0dolmen", jsonptr.Pointer{"paths", "~dolmen"}, nil},
 }
 
 func TestPointerParse(t *testing.T) {
@@ -65,8 +70,10 @@ func TestPointerParse(t *testing.T) {
 	}
 }
 
-// simpleParse is the original, simple implementation of Parse
-func simpleParse(pointer string) (jsonptr.Pointer, error) {
+// AlternateParse is another implementation of Parse that aimed
+// to be faster, but isn't for the most common case (no escape)
+// See BenchmarkParse for comparison.
+func AltParse(pointer string) (jsonptr.Pointer, error) {
 	if pointer == "" {
 		return nil, nil
 	}
@@ -74,10 +81,31 @@ func simpleParse(pointer string) (jsonptr.Pointer, error) {
 		return nil, jsonptr.ErrSyntax
 	}
 	ptr := strings.Split(pointer[1:], "/")
-	for i, part := range ptr {
+	p := 1
+	i := 0
+	for {
+		q := p
+		for q < len(pointer) {
+			if pointer[q] == '~' {
+				break
+			}
+			q++
+		}
+		if q == len(pointer) {
+			break
+		}
+		for p+len(ptr[i]) < q {
+			i++
+			p += len(ptr) + 1
+		}
 		var err error
-		if ptr[i], err = jsonptr.UnescapeString(part); err != nil {
+		ptr[i], err = jsonptr.UnescapeString(ptr[i])
+		if err != nil {
 			return nil, err
+		}
+		i++
+		if i == len(ptr) {
+			break
 		}
 	}
 	return ptr, nil
@@ -88,8 +116,8 @@ func BenchmarkParse(b *testing.B) {
 		name  string
 		parse func(string) (jsonptr.Pointer, error)
 	}{
-		{"simpleParse", simpleParse},
 		{"jsonptr.Parse", jsonptr.Parse},
+		{"AltParse", AltParse},
 	}
 	for _, test := range parseTests {
 		for _, impl := range implementations {
