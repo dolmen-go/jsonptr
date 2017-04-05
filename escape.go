@@ -94,12 +94,12 @@ func EscapeString(name string) string {
 // Any '~' followed by something else (or nothing) is an error ErrSyntax.
 // Any '/' is an error ErrSyntax.
 func Unescape(b []byte) ([]byte, error) {
-	q := -1
+	p := -1
 Loop:
-	for p := 0; p < len(b); p++ {
-		switch b[p] {
+	for q := 0; q < len(b); q++ {
+		switch b[q] {
 		case '~':
-			q = p
+			p = q
 			break Loop
 		case '/':
 			return nil, ErrUsage
@@ -107,7 +107,7 @@ Loop:
 	}
 
 	// Nothing to replace
-	if q == -1 {
+	if p == -1 {
 		return b, nil
 	}
 
@@ -115,7 +115,6 @@ Loop:
 		return nil, ErrSyntax
 	}
 
-	p := q
 	for q := p; q < len(b); q++ {
 		switch b[q] {
 		case '~':
