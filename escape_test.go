@@ -74,7 +74,7 @@ func TestEscape(t *testing.T) {
 
 		for _, in := range buffers {
 			out := jsonptr.AppendEscape(in[:0], tc.in)
-			t.Logf("cap=%d => cap=%d", cap(in), cap(out))
+			t.Logf("AppendEscape cap=%d => cap=%d", cap(in), cap(out))
 			if string(out) != tc.expected {
 				t.Errorf("AppendEscape cap=%d got: %q\n", cap(in), out)
 			}
