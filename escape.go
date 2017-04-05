@@ -1,7 +1,5 @@
 package jsonptr
 
-import "strings"
-
 // AppendEscape appends the escaped name to dst and returns it.
 // The buffer grows (and so is reallocated) if necessary.
 func AppendEscape(dst []byte, name string) []byte {
@@ -147,16 +145,23 @@ Loop:
 // Any '~' followed by something else (or nothing) is an error ErrSyntax.
 // If the input contains '/' the result is undefined (may panic).
 func UnescapeString(token string) (string, error) {
-	p := strings.IndexByte(token, '~')
+	p := -1
+Loop:
+	for q := 0; q < len(token); q++ {
+		switch token[q] {
+		case '~':
+			p = q
+			break Loop
+		case '/':
+			return "", ErrUsage
+		}
+	}
+
+	// Nothing to replace
 	if p == -1 {
-		/*
-			// Costly check just to detect unlikely bad usage
-			if strings.IndexByte(token, '/') >= 0 {
-				return "", ErrUsage
-			}
-		*/
 		return token, nil
 	}
+
 	if token[len(token)-1] == '~' {
 		return "", ErrSyntax
 	}

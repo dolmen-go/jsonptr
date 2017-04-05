@@ -139,11 +139,11 @@ func TestUnescape(t *testing.T) {
 		{"a ~ x", "", jsonptr.ErrSyntax},
 		{"a ~0 ~x", "", jsonptr.ErrSyntax},
 		// The following cases are declared as 'undefined result' in the documentation
-		{"/", "/", nil},
+		{"/", "", jsonptr.ErrUsage},
 		{"~0 /", "", jsonptr.ErrUsage},
 		{"~0 / ", "", jsonptr.ErrUsage},
 	} {
-		t.Logf("%s => %s", test.in, test.out)
+		t.Logf("%q => %q", test.in, test.out)
 		got, err := jsonptr.UnescapeString(test.in)
 		if err != test.err {
 			t.Logf("got: %s, expected: %s", err, test.err)
