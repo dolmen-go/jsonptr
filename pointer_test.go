@@ -70,7 +70,7 @@ func TestPointerParse(t *testing.T) {
 	}
 }
 
-// AlternateParse is another implementation of Parse that aimed
+// AltParse is another implementation of Parse that aimed
 // to be faster, but isn't for the most common case (no escape)
 // See BenchmarkParse for comparison.
 func AltParse(pointer string) (jsonptr.Pointer, error) {
