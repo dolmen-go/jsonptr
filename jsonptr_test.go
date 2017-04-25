@@ -93,6 +93,7 @@ func (tester *getTester) runTest() {
 	tester.checkGet(`{"a":[]}`, `/a`, []interface{}{})
 	tester.checkGet(`{"a":[1,2]}`, `/a/0`, float64(1))
 	tester.checkGet(`{"a":[1,2]}`, `/a/1`, float64(2))
+	tester.checkGet(`{"b":null,"a":[1,2]}`, `/a/1`, float64(2))
 	tester.checkGet(`{"a":[0,1,2,3,4,5,6,7,8,9,"x"]}`, `/a/10`, "x")
 }
 
