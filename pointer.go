@@ -1,6 +1,7 @@
 package jsonptr
 
 import (
+	"encoding/json"
 	"strconv"
 	"strings"
 )
@@ -102,6 +103,8 @@ func (ptr *Pointer) Index(index int) *Pointer {
 }
 
 // In returns the value from doc pointed by ptr.
+//
+// doc may be a deserialized document, or a json.RawMessage.
 func (ptr Pointer) In(doc interface{}) (interface{}, error) {
 	for i, key := range ptr {
 		switch here := (doc).(type) {
@@ -119,10 +122,21 @@ func (ptr Pointer) In(doc interface{}) (interface{}, error) {
 				return nil, indexError(ptr[:i].String())
 			}
 			doc = here[n]
+		case json.RawMessage:
+			v, err := getJSON(here, ptr[i:].String())
+			if perr, ok := err.(*PtrError); ok {
+				perr.Ptr = ptr[:i].String() + perr.Ptr
+			}
+			return v, err
 		default:
 			// We report the error at the upper level
 			return nil, docError(ptr[:i-1].String(), doc)
 		}
+	}
+
+	if raw, ok := doc.(json.RawMessage); ok {
+		err := json.Unmarshal(raw, &doc)
+		return doc, err
 	}
 	return doc, nil
 }

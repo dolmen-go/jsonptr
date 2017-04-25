@@ -11,6 +11,8 @@
 package jsonptr
 
 import (
+	"bytes"
+	"encoding/json"
 	"strconv"
 	"strings"
 )
@@ -53,11 +55,116 @@ func arrayIndex(token string) (int, error) {
 	return n, nil
 }
 
+func getJSON(doc json.RawMessage, ptr string) (interface{}, error) {
+	if len(ptr) == 0 {
+		var value interface{}
+		err := json.Unmarshal(doc, value)
+		return value, err
+	}
+	//log.Println("[", ptr, "]")
+	if ptr[0] != '/' {
+		return nil, ErrSyntax
+	}
+
+	p := int(0)
+	decoder := json.NewDecoder(bytes.NewReader(doc))
+	for p < len(ptr) {
+		p++
+		cur := ptr[p:]
+		q := strings.IndexByte(cur, '/')
+		if q != -1 {
+			cur = cur[:q]
+		} else {
+			q = len(cur)
+		}
+		p += q
+
+		tok, err := decoder.Token()
+		if err != nil {
+			// TODO wrap err
+			return nil, err
+		}
+		delim, ok := tok.(json.Delim)
+		if !ok {
+			return nil, docError(ptr[:p-q-1], tok)
+		}
+		switch delim {
+		case '{':
+			key, err := UnescapeString(cur)
+			if err != nil {
+				return nil, &PtrError{ptr[:p], err}
+			}
+			found := false
+			for {
+				tok, err := decoder.Token()
+				if err != nil {
+					// TODO wrap err
+					return nil, err
+				}
+				k, ok := tok.(string)
+				if !ok {
+					// This should not happen
+					panic("unexpected key type")
+				}
+				if !decoder.More() {
+					panic("unexpected missing value in object")
+				}
+				if k == key {
+					found = true
+					break
+				}
+				// skip value
+				var skip json.RawMessage
+				err = decoder.Decode(&skip)
+				if err != nil {
+					return nil, err
+				}
+			}
+			if !found {
+				return nil, propertyError(ptr[:p])
+			}
+		case '[':
+			n, err := arrayIndex(cur)
+			if err != nil {
+				return nil, &PtrError{ptr[:p], err}
+			}
+			if n < 0 {
+				return nil, indexError(ptr[:p])
+			}
+			i := -1
+			for decoder.More() {
+				i++
+				if i == n {
+					// Continue deeper in the structure
+					break
+				}
+				var skip json.RawMessage
+				err = decoder.Decode(&skip)
+				if err != nil {
+					return nil, err
+				}
+			}
+			if i < n {
+				return nil, indexError(ptr[:p])
+			}
+		}
+	}
+
+	var value interface{}
+	err := decoder.Decode(&value)
+	return value, err
+}
+
 // Get extracts a value from a JSON-like data tree.
 //
+// doc may be a deserialized document, or a json.RawMessage.
 // In case of error a PtrError is returned.
 func Get(doc interface{}, ptr string) (interface{}, error) {
 	if len(ptr) == 0 {
+		if raw, ok := doc.(json.RawMessage); ok {
+			err := json.Unmarshal(raw, &doc)
+			return doc, err
+		}
 		return doc, nil
 	}
 	if ptr[0] != '/' {
@@ -91,6 +198,12 @@ func Get(doc interface{}, ptr string) (interface{}, error) {
 				return nil, indexError(ptr[:p])
 			}
 			doc = here[n]
+		case json.RawMessage:
+			v, err := getJSON(here, ptr[p-q-1:])
+			if perr, ok := err.(*PtrError); ok {
+				perr.Ptr = ptr[:p-q-1+len(perr.Ptr)]
+			}
+			return v, err
 		default:
 			return nil, docError(ptr[:p], doc)
 		}
@@ -101,6 +214,10 @@ func Get(doc interface{}, ptr string) (interface{}, error) {
 		cur = ptr[p:]
 	}
 
+	if raw, ok := doc.(json.RawMessage); ok {
+		err := json.Unmarshal(raw, &doc)
+		return doc, err
+	}
 	return doc, nil
 }
 

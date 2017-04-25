@@ -29,15 +29,25 @@ func (tester *getTester) checkGet(jsonData string, ptr string, expected interfac
 		return
 	}
 
+	// Get from a deserialized structure
 	got, err := tester.Get(data, ptr)
 	if err != nil {
-		t.Logf("  unexpected error: %s\n", err)
-		t.Fail()
+		t.Fatalf("  unexpected error: %s\n", err)
 		return
 	}
 	if !reflect.DeepEqual(got, expected) {
-		t.Logf("Result error!\n  expected: %T %v\n       got: %T %v\n", expected, expected, got, got)
-		t.Fail()
+		t.Fatalf("Result error!\n  expected: %T %v\n       got: %T %v\n", expected, expected, got, got)
+		return
+	}
+
+	// Get from the raw JSON document
+	got, err = tester.Get(json.RawMessage(jsonData), ptr)
+	if err != nil {
+		t.Fatalf("  unexpected error: %s\n", err)
+		return
+	}
+	if !reflect.DeepEqual(got, expected) {
+		t.Fatalf("Result error!\n  expected: %T %v\n       got: %T %v\n", expected, expected, got, got)
 	}
 }
 
