@@ -56,21 +56,22 @@ func arrayIndex(token string) (int, error) {
 }
 
 func getJSON(doc json.RawMessage, ptr string) (interface{}, error) {
-	if len(ptr) == 0 {
-		var value interface{}
-		err := json.Unmarshal(doc, value)
-		return value, err
-	}
+	/*
+		if len(ptr) == 0 {
+			var value interface{}
+			err := json.Unmarshal(doc, value)
+			return value, err
+		}
+		if ptr[0] != '/' {
+			return nil, ErrSyntax
+		}
+	*/
 	//log.Println("[", ptr, "]")
-	if ptr[0] != '/' {
-		return nil, ErrSyntax
-	}
 
-	p := int(0)
+	p := int(1)
+	cur := ptr[1:]
 	decoder := json.NewDecoder(bytes.NewReader(doc))
-	for p < len(ptr) {
-		p++
-		cur := ptr[p:]
+	for {
 		q := strings.IndexByte(cur, '/')
 		if q != -1 {
 			cur = cur[:q]
@@ -148,6 +149,12 @@ func getJSON(doc json.RawMessage, ptr string) (interface{}, error) {
 				return nil, indexError(ptr[:p])
 			}
 		}
+
+		p++
+		if p > len(ptr) {
+			break
+		}
+		cur = ptr[p:]
 	}
 
 	var value interface{}
