@@ -9,6 +9,18 @@
             "program": "${workspaceRoot}"
         },
         {
+            "name": "test: Get",
+            "type": "go",
+            "request": "launch",
+            "mode": "test",
+            "program": "${workspaceRoot}",
+            "args": [
+                "-test.v",
+                "-test.run",
+                "TestGet"
+            ]
+        },
+        {
             "name": "test: Escape",
             "type": "go",
             "request": "launch",
