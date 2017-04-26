@@ -123,7 +123,7 @@ func (ptr Pointer) In(doc interface{}) (interface{}, error) {
 			}
 			doc = here[n]
 		case json.RawMessage:
-			v, err := getJSON(here, ptr[i:].String())
+			v, err := getRaw(here, ptr[i:].String())
 			if perr, ok := err.(*PtrError); ok {
 				perr.Ptr = ptr[:i].String() + perr.Ptr
 			}

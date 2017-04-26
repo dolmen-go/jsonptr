@@ -55,22 +55,18 @@ func arrayIndex(token string) (int, error) {
 	return n, nil
 }
 
-func getJSON(doc json.RawMessage, ptr string) (interface{}, error) {
-	/*
-		if len(ptr) == 0 {
-			var value interface{}
-			err := json.Unmarshal(doc, value)
-			return value, err
-		}
-		if ptr[0] != '/' {
-			return nil, ErrSyntax
-		}
-	*/
+// jsonDecoder is a subset of the interface of encoding/json.Decoder.
+type jsonDecoder interface {
+	Token() (json.Token, error)
+	More() bool
+	Decode(interface{}) error
+}
+
+func getJSON(decoder jsonDecoder, ptr string) (interface{}, error) {
 	//log.Println("[", ptr, "]")
 
 	p := int(1)
 	cur := ptr[1:]
-	decoder := json.NewDecoder(bytes.NewReader(doc))
 	for {
 		q := strings.IndexByte(cur, '/')
 		if q != -1 {
@@ -162,6 +158,21 @@ func getJSON(doc json.RawMessage, ptr string) (interface{}, error) {
 	return value, err
 }
 
+func getRaw(doc json.RawMessage, ptr string) (interface{}, error) {
+	/*
+		if len(ptr) == 0 {
+			var value interface{}
+			err := json.Unmarshal(doc, value)
+			return value, err
+		}
+		if ptr[0] != '/' {
+			return nil, ErrSyntax
+		}
+	*/
+
+	return getJSON(json.NewDecoder(bytes.NewReader(doc)), ptr)
+}
+
 func getLeaf(doc interface{}) (interface{}, error) {
 	if raw, ok := doc.(json.RawMessage); ok {
 		err := json.Unmarshal(raw, &doc)
@@ -210,7 +221,7 @@ func Get(doc interface{}, ptr string) (interface{}, error) {
 			}
 			doc = here[n]
 		case json.RawMessage:
-			v, err := getJSON(here, ptr[p-q-1:])
+			v, err := getRaw(here, ptr[p-q-1:])
 			if perr, ok := err.(*PtrError); ok {
 				perr.Ptr = ptr[:p-q-1+len(perr.Ptr)]
 			}
