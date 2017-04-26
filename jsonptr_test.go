@@ -7,6 +7,7 @@ package jsonptr_test
 import (
 	"encoding/json"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/dolmen-go/jsonptr"
@@ -42,6 +43,16 @@ func (tester *getTester) checkGet(jsonData string, ptr string, expected interfac
 
 	// Get from the raw JSON document
 	got, err = tester.Get(json.RawMessage(jsonData), ptr)
+	if err != nil {
+		t.Fatalf("  unexpected error: %s\n", err)
+		return
+	}
+	if !reflect.DeepEqual(got, expected) {
+		t.Fatalf("Result error!\n  expected: %T %v\n       got: %T %v\n", expected, expected, got, got)
+	}
+
+	// Get from the raw JSON document
+	got, err = tester.Get(json.NewDecoder(strings.NewReader(jsonData)), ptr)
 	if err != nil {
 		t.Fatalf("  unexpected error: %s\n", err)
 		return

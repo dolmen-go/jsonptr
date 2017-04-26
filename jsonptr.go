@@ -55,14 +55,14 @@ func arrayIndex(token string) (int, error) {
 	return n, nil
 }
 
-// jsonDecoder is a subset of the interface of encoding/json.Decoder.
-type jsonDecoder interface {
+// JSONDecoder is a subset of the interface of encoding/json.Decoder.
+type JSONDecoder interface {
 	Token() (json.Token, error)
 	More() bool
 	Decode(interface{}) error
 }
 
-func getJSON(decoder jsonDecoder, ptr string) (interface{}, error) {
+func getJSON(decoder JSONDecoder, ptr string) (interface{}, error) {
 	//log.Println("[", ptr, "]")
 
 	p := int(1)
@@ -174,16 +174,25 @@ func getRaw(doc json.RawMessage, ptr string) (interface{}, error) {
 }
 
 func getLeaf(doc interface{}) (interface{}, error) {
-	if raw, ok := doc.(json.RawMessage); ok {
-		err := json.Unmarshal(raw, &doc)
-		return doc, err
+	var err error
+
+	switch raw := doc.(type) {
+	case json.RawMessage:
+		err = json.Unmarshal(raw, &doc)
+	case JSONDecoder:
+		doc = nil
+		err = raw.Decode(&doc)
 	}
-	return doc, nil
+	return doc, err
 }
 
 // Get extracts a value from a JSON-like data tree.
 //
-// doc may be a deserialized document, or a json.RawMessage.
+// doc may be:
+// - a deserialized document: []interface{}, map[string]interface{},
+// - a json.RawMessage
+// - a JSONDecoder (such as *json.Decoder) for streamed decoding
+//
 // In case of error a PtrError is returned.
 func Get(doc interface{}, ptr string) (interface{}, error) {
 	if len(ptr) == 0 {
@@ -220,6 +229,12 @@ func Get(doc interface{}, ptr string) (interface{}, error) {
 				return nil, indexError(ptr[:p])
 			}
 			doc = here[n]
+		case JSONDecoder:
+			v, err := getJSON(here, ptr[p-q-1:])
+			if perr, ok := err.(*PtrError); ok {
+				perr.Ptr = ptr[:p-q-1+len(perr.Ptr)]
+			}
+			return v, err
 		case json.RawMessage:
 			v, err := getRaw(here, ptr[p-q-1:])
 			if perr, ok := err.(*PtrError); ok {

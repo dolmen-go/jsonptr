@@ -122,6 +122,12 @@ func (ptr Pointer) In(doc interface{}) (interface{}, error) {
 				return nil, indexError(ptr[:i].String())
 			}
 			doc = here[n]
+		case JSONDecoder:
+			v, err := getJSON(here, ptr[i:].String())
+			if perr, ok := err.(*PtrError); ok {
+				perr.Ptr = ptr[:i].String() + perr.Ptr
+			}
+			return v, err
 		case json.RawMessage:
 			v, err := getRaw(here, ptr[i:].String())
 			if perr, ok := err.(*PtrError); ok {
@@ -134,11 +140,7 @@ func (ptr Pointer) In(doc interface{}) (interface{}, error) {
 		}
 	}
 
-	if raw, ok := doc.(json.RawMessage); ok {
-		err := json.Unmarshal(raw, &doc)
-		return doc, err
-	}
-	return doc, nil
+	return getLeaf(doc)
 }
 
 // Set changes a value in document pdoc at location pointed by ptr.
