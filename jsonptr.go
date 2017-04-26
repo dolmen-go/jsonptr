@@ -2,10 +2,10 @@
 // Use of this source code is governed by the Apache 2.0 license that
 // can be found in the LICENSE file.
 
-// Package jsonptr implements JSON Pointer (RFC 6901) lookup. Fast and strong testsuite.
+// Package jsonptr implements JSON Pointer (RFC 6901) lookup. Fast, with strong testsuite.
 //
 // Any part of a data tree made of []interface{} or map[string]interface{}
-// can be dereferenced with a JSON Pointer.
+// may be dereferenced with a JSON Pointer.
 //
 // Specification: https://tools.ietf.org/html/rfc6901
 package jsonptr
@@ -56,6 +56,7 @@ func arrayIndex(token string) (int, error) {
 }
 
 // JSONDecoder is a subset of the interface of encoding/json.Decoder.
+// It can be used as an input to Get().
 type JSONDecoder interface {
 	Token() (json.Token, error)
 	More() bool
