@@ -81,6 +81,7 @@ func (tester *getTester) runTest() {
 	tester.checkGet(`["a","b"]`, `/1`, "b")
 	tester.checkGet(`{"a":"x"}`, `/a`, "x")
 	tester.checkGet(`{"":"x"}`, `/`, "x")
+	tester.checkGet(`{"":{"":{"":true}}}`, `///`, true)
 	tester.checkGet(`{"~":"x"}`, `/~0`, "x")
 	tester.checkGet(`{"/":"y"}`, `/~1`, "y")
 	tester.checkGet(`{"~/":"z"}`, `/~0~1`, "z")
