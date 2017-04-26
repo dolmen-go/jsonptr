@@ -155,17 +155,21 @@ func getJSON(doc json.RawMessage, ptr string) (interface{}, error) {
 	return value, err
 }
 
+func getLeaf(doc interface{}) (interface{}, error) {
+	if raw, ok := doc.(json.RawMessage); ok {
+		err := json.Unmarshal(raw, &doc)
+		return doc, err
+	}
+	return doc, nil
+}
+
 // Get extracts a value from a JSON-like data tree.
 //
 // doc may be a deserialized document, or a json.RawMessage.
 // In case of error a PtrError is returned.
 func Get(doc interface{}, ptr string) (interface{}, error) {
 	if len(ptr) == 0 {
-		if raw, ok := doc.(json.RawMessage); ok {
-			err := json.Unmarshal(raw, &doc)
-			return doc, err
-		}
-		return doc, nil
+		return getLeaf(doc)
 	}
 	if ptr[0] != '/' {
 		return nil, syntaxError(ptr)
@@ -214,11 +218,7 @@ func Get(doc interface{}, ptr string) (interface{}, error) {
 		cur = ptr[p:]
 	}
 
-	if raw, ok := doc.(json.RawMessage); ok {
-		err := json.Unmarshal(raw, &doc)
-		return doc, err
-	}
-	return doc, nil
+	return getLeaf(doc)
 }
 
 // Set modifies a JSON-like data tree.
