@@ -63,7 +63,7 @@ type JSONDecoder interface {
 	Decode(interface{}) error
 }
 
-func getJSON(decoder JSONDecoder, ptr string) (interface{}, error) {
+func getJSON(decoder JSONDecoder, ptr string) (interface{}, ptrError) {
 	//log.Println("[", ptr, "]")
 
 	p := int(1)
@@ -79,8 +79,7 @@ func getJSON(decoder JSONDecoder, ptr string) (interface{}, error) {
 
 		tok, err := decoder.Token()
 		if err != nil {
-			// TODO wrap err
-			return nil, err
+			return nil, jsonError(ptr[:p], err)
 		}
 		delim, ok := tok.(json.Delim)
 		if !ok {
@@ -96,8 +95,7 @@ func getJSON(decoder JSONDecoder, ptr string) (interface{}, error) {
 			for {
 				tok, err := decoder.Token()
 				if err != nil {
-					// TODO wrap err
-					return nil, docError(ptr[:p], err)
+					return nil, jsonError(ptr[:p], err)
 				}
 				k, ok := tok.(string)
 				if !ok {
@@ -115,7 +113,7 @@ func getJSON(decoder JSONDecoder, ptr string) (interface{}, error) {
 				var skip json.RawMessage
 				err = decoder.Decode(&skip)
 				if err != nil {
-					return nil, docError(ptr[:p], err)
+					return nil, jsonError(ptr[:p], err)
 				}
 			}
 			if !found {
@@ -139,7 +137,7 @@ func getJSON(decoder JSONDecoder, ptr string) (interface{}, error) {
 				var skip json.RawMessage
 				err = decoder.Decode(&skip)
 				if err != nil {
-					return nil, docError(ptr[:p], err)
+					return nil, jsonError(ptr[:p], err)
 				}
 			}
 			if i < n {
@@ -155,18 +153,20 @@ func getJSON(decoder JSONDecoder, ptr string) (interface{}, error) {
 	}
 
 	var value interface{}
-	err := decoder.Decode(&value)
-	return value, err
+	if err := decoder.Decode(&value); err != nil {
+		return nil, jsonError(ptr, err)
+	}
+	return value, nil
 }
 
-func getRaw(doc json.RawMessage, ptr string) (interface{}, error) {
+func getRaw(doc json.RawMessage, ptr string) (interface{}, ptrError) {
 	/*
 		if len(ptr) == 0 {
 			var value interface{}
-			if err := json.Unmarshal(doc, value); err != nil {
-				return nil, &DocumentError{ptr, err}
+			if err := json.Unmarshal(doc, &value); err != nil {
+				return nil, jsonError(ptr, err)
 			}
-			return value, err
+			return value, nil
 		}
 		if ptr[0] != '/' {
 			return nil, syntaxError(ptr)
@@ -176,7 +176,7 @@ func getRaw(doc json.RawMessage, ptr string) (interface{}, error) {
 	return getJSON(json.NewDecoder(bytes.NewReader(doc)), ptr)
 }
 
-func getLeaf(doc interface{}) (interface{}, error) {
+func getLeaf(doc interface{}) (interface{}, ptrError) {
 	var err error
 
 	switch raw := doc.(type) {
@@ -189,8 +189,10 @@ func getLeaf(doc interface{}) (interface{}, error) {
 	default:
 		return doc, nil
 	}
-	// FIXME wrap err as a DocumentError
-	return doc, err
+	if err != nil {
+		return nil, jsonError("", err)
+	}
+	return doc, nil
 }
 
 // Get extracts a value from a JSON-like data tree.
@@ -258,7 +260,11 @@ func Get(doc interface{}, ptr string) (interface{}, error) {
 		cur = ptr[p:]
 	}
 
-	return getLeaf(doc)
+	doc, err := getLeaf(doc)
+	if err != nil {
+		err.rebase(ptr)
+	}
+	return doc, err
 }
 
 // Set modifies a JSON-like data tree.
@@ -276,6 +282,7 @@ func Set(doc *interface{}, ptr string, value interface{}) error {
 	prop := ptr[p+1:]
 	parentPtr := ptr[:p]
 
+	// FIXME Get called from Set should not allow Decoder and RawMessage
 	parent, err := Get(*doc, parentPtr)
 	if err != nil {
 		return err

@@ -1,6 +1,7 @@
 package jsonptr
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strconv"
@@ -17,6 +18,7 @@ var (
 )
 
 type ptrError interface {
+	error
 	rebase(base string)
 }
 
@@ -34,7 +36,9 @@ func (e *BadPointerError) Error() string {
 }
 
 func (e *BadPointerError) rebase(base string) {
-	e.BadPtr = base + e.BadPtr
+	if e != nil {
+		e.BadPtr = base + e.BadPtr
+	}
 }
 
 func syntaxError(ptr string) *BadPointerError {
@@ -55,7 +59,9 @@ func (e *PtrError) Error() string {
 }
 
 func (e *PtrError) rebase(base string) {
-	e.Ptr = base + e.Ptr
+	if e != nil {
+		e.Ptr = base + e.Ptr
+	}
 }
 
 func indexError(ptr string) *PtrError {
@@ -78,9 +84,18 @@ func (e *DocumentError) Error() string {
 }
 
 func (e *DocumentError) rebase(base string) {
-	e.Ptr = base + e.Ptr
+	if e != nil {
+		e.Ptr = base + e.Ptr
+	}
 }
 
 func docError(ptr string, doc interface{}) *DocumentError {
 	return &DocumentError{ptr, fmt.Errorf("%q: not an object or array but %T", ptr, doc)}
+}
+
+func jsonError(ptr string, err error) *DocumentError {
+	if e, ok := err.(*json.SyntaxError); ok {
+		return &DocumentError{"", e}
+	}
+	return &DocumentError{ptr, err}
 }
