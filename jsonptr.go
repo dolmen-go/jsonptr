@@ -90,14 +90,14 @@ func getJSON(decoder JSONDecoder, ptr string) (interface{}, error) {
 		case '{':
 			key, err := UnescapeString(cur)
 			if err != nil {
-				return nil, &PtrError{ptr[:p], err}
+				return nil, &BadPointerError{ptr[:p], err}
 			}
 			found := false
 			for {
 				tok, err := decoder.Token()
 				if err != nil {
 					// TODO wrap err
-					return nil, err
+					return nil, docError(ptr[:p], err)
 				}
 				k, ok := tok.(string)
 				if !ok {
@@ -115,7 +115,7 @@ func getJSON(decoder JSONDecoder, ptr string) (interface{}, error) {
 				var skip json.RawMessage
 				err = decoder.Decode(&skip)
 				if err != nil {
-					return nil, err
+					return nil, docError(ptr[:p], err)
 				}
 			}
 			if !found {
@@ -124,7 +124,7 @@ func getJSON(decoder JSONDecoder, ptr string) (interface{}, error) {
 		case '[':
 			n, err := arrayIndex(cur)
 			if err != nil {
-				return nil, &PtrError{ptr[:p], err}
+				return nil, &BadPointerError{ptr[:p], err}
 			}
 			if n < 0 {
 				return nil, indexError(ptr[:p])
@@ -139,7 +139,7 @@ func getJSON(decoder JSONDecoder, ptr string) (interface{}, error) {
 				var skip json.RawMessage
 				err = decoder.Decode(&skip)
 				if err != nil {
-					return nil, err
+					return nil, docError(ptr[:p], err)
 				}
 			}
 			if i < n {
@@ -163,11 +163,13 @@ func getRaw(doc json.RawMessage, ptr string) (interface{}, error) {
 	/*
 		if len(ptr) == 0 {
 			var value interface{}
-			err := json.Unmarshal(doc, value)
+			if err := json.Unmarshal(doc, value); err != nil {
+				return nil, &DocumentError{ptr, err}
+			}
 			return value, err
 		}
 		if ptr[0] != '/' {
-			return nil, ErrSyntax
+			return nil, syntaxError(ptr)
 		}
 	*/
 
@@ -179,11 +181,15 @@ func getLeaf(doc interface{}) (interface{}, error) {
 
 	switch raw := doc.(type) {
 	case json.RawMessage:
+		doc = nil
 		err = json.Unmarshal(raw, &doc)
 	case JSONDecoder:
 		doc = nil
 		err = raw.Decode(&doc)
+	default:
+		return doc, nil
 	}
+	// FIXME wrap err as a DocumentError
 	return doc, err
 }
 
@@ -215,7 +221,7 @@ func Get(doc interface{}, ptr string) (interface{}, error) {
 		case map[string]interface{}:
 			key, err := UnescapeString(cur[:q])
 			if err != nil {
-				return nil, &PtrError{ptr[:p], err}
+				return nil, &BadPointerError{ptr[:p], err}
 			}
 			var ok bool
 			if doc, ok = here[key]; !ok {
@@ -224,7 +230,7 @@ func Get(doc interface{}, ptr string) (interface{}, error) {
 		case []interface{}:
 			n, err := arrayIndex(cur[:q])
 			if err != nil {
-				return nil, &PtrError{ptr[:p], err}
+				return nil, &BadPointerError{ptr[:p], err}
 			}
 			if n < 0 || n >= len(here) {
 				return nil, indexError(ptr[:p])
@@ -279,14 +285,13 @@ func Set(doc *interface{}, ptr string, value interface{}) error {
 	case map[string]interface{}:
 		key, err := UnescapeString(prop)
 		if err != nil {
-			return &PtrError{ptr, err}
+			return &BadPointerError{ptr, err}
 		}
 		parent[key] = value
 	case []interface{}:
 		n, err := arrayIndex(prop)
 		if err != nil {
-			return &PtrError{ptr, err}
-
+			return &BadPointerError{ptr, err}
 		}
 		if n == -1 {
 			n = len(parent)

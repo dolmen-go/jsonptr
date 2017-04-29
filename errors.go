@@ -16,12 +16,36 @@ var (
 	ErrUsage = errors.New("invalid use of jsonptr.UnescapeString on string with '/'")
 )
 
-// PtrError is the structured error for JSON Pointer parsing or navigation
-// errors
+type ptrError interface {
+	rebase(base string)
+}
+
+// BadPointerError signals JSON Pointer parsing errors
+type BadPointerError struct {
+	// Ptr is the substring of the original pointer where the error occurred
+	BadPtr string
+	// Err is ErrSyntax
+	Err error
+}
+
+// Error implements the 'error' interface
+func (e *BadPointerError) Error() string {
+	return strconv.Quote(e.BadPtr) + ": " + e.Err.Error()
+}
+
+func (e *BadPointerError) rebase(base string) {
+	e.BadPtr = base + e.BadPtr
+}
+
+func syntaxError(ptr string) *BadPointerError {
+	return &BadPointerError{ptr, ErrSyntax}
+}
+
+// PtrError signals JSON Pointer navigation errors
 type PtrError struct {
 	// Ptr is the substring of the original pointer where the error occurred
 	Ptr string
-	// Err is one of ErrSyntax, ErrIndex, ErrProperty
+	// Err is one of ErrIndex, ErrProperty
 	Err error
 }
 
@@ -30,8 +54,8 @@ func (e *PtrError) Error() string {
 	return strconv.Quote(e.Ptr) + ": " + e.Err.Error()
 }
 
-func syntaxError(ptr string) *PtrError {
-	return &PtrError{ptr, ErrSyntax}
+func (e *PtrError) rebase(base string) {
+	e.Ptr = base + e.Ptr
 }
 
 func indexError(ptr string) *PtrError {
@@ -42,6 +66,21 @@ func propertyError(ptr string) *PtrError {
 	return &PtrError{ptr, ErrProperty}
 }
 
-func docError(ptr string, doc interface{}) *PtrError {
-	return &PtrError{ptr, fmt.Errorf("not an object or array but %T", doc)}
+// DocumentError signals a document that can't be processed by this library
+type DocumentError struct {
+	Ptr string
+	Err error
+}
+
+// Error implements the 'error' interface
+func (e *DocumentError) Error() string {
+	return e.Err.Error()
+}
+
+func (e *DocumentError) rebase(base string) {
+	e.Ptr = base + e.Ptr
+}
+
+func docError(ptr string, doc interface{}) *DocumentError {
+	return &DocumentError{ptr, fmt.Errorf("%q: not an object or array but %T", ptr, doc)}
 }
