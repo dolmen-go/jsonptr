@@ -76,7 +76,7 @@ func (tester *getTester) runTest() {
 	} {
 		got, err := tester.Get(doc, "")
 		if err != nil {
-			t.Logf("%T: unexpected error: %s\n", doc, err)
+			t.Logf("%T: unexpected error: %T %q\n", doc, err, err)
 			t.Fail()
 			continue
 		}
