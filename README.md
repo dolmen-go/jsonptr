@@ -53,7 +53,7 @@ func main() {
 
 ## Status
 
-This is still early work in progress.
+Production ready.
 
 The aim is code coverage of 100%. Use go coverage tools and consider any
 code not covered by the testsuite as never tested and full of bugs.
@@ -65,7 +65,7 @@ Todo:
 
 ## License
 
-Copyright 2016 Olivier Mengué
+Copyright 2017 Olivier Mengué
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
