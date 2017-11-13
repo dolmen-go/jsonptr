@@ -198,9 +198,9 @@ func getLeaf(doc interface{}) (interface{}, ptrError) {
 // Get extracts a value from a JSON-like data tree.
 //
 // doc may be:
-// - a deserialized document: []interface{}, map[string]interface{},
-// - a json.RawMessage
-// - a JSONDecoder (such as *json.Decoder) for streamed decoding
+//   - a deserialized document made of []interface{}, map[string]interface{} or any terminal value
+//   - a json.RawMessage
+//   - a JSONDecoder (such as *json.Decoder) for streamed decoding
 //
 // In case of error a PtrError is returned.
 func Get(doc interface{}, ptr string) (interface{}, error) {
