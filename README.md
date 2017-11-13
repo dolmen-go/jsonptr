@@ -13,7 +13,7 @@ Goals:
     * Short
     * Complete
     * Structured errors, not just strings: [`BadPointerError`](https://godoc.org/github.com/dolmen-go/jsonptr#BadPointerError), [`PtrError`](https://godoc.org/github.com/dolmen-go/jsonptr#PtrError), [`DocumentError`](https://godoc.org/github.com/dolmen-go/jsonptr#DocumentError)
-    * Working at JSON data model level (tree of `[]interface{}`, `map[string]interface{}`) as well as serialized JSON ([`json.RawMessage`](https://golang.org/pkg/encoding/json/#RawMessage))
+    * Working at JSON data model level (tree of `[]interface{}`, `map[string]interface{}`) as well as serialized JSON ([`json.RawMessage`](https://golang.org/pkg/encoding/json/#RawMessage), [`json.Decoder`](https://golang.org/pkg/encoding/json/#Decoder))
 2. Correctness (most existing open source Go implementations have limitations in their interface or have implementation bugs)
     * Full testsuite (work in progress)
     * Reject invalid escapes (regexp `/~[^01]/`)
