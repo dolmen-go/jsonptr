@@ -57,13 +57,8 @@ func Example() {
 
 func ExampleSet() {
 
-	newArray := func() interface{} {
-		return make([]interface{}, 0)
-	}
-
-	newObject := func() interface{} {
-		return make(map[string]interface{})
-	}
+	newArray := []interface{}(nil)
+	newObject := map[string]interface{}(nil)
 
 	var doc interface{}
 
@@ -82,11 +77,7 @@ func ExampleSet() {
 		{"/arr/-", 0},
 		{"/obj/", nil},
 	} {
-		what := step.what
-		if f, isFunc := what.(func() interface{}); isFunc {
-			what = f()
-		}
-		err := jsonptr.Set(&doc, step.where, what)
+		err := jsonptr.Set(&doc, step.where, step.what)
 		if err != nil {
 			panic(err)
 		}

@@ -294,7 +294,11 @@ func Set(doc *interface{}, ptr string, value interface{}) error {
 		if err != nil {
 			return &BadPointerError{ptr, err}
 		}
-		parent[key] = value
+		if parent != nil {
+			parent[key] = value
+		} else {
+			return Set(doc, parentPtr, map[string]interface{}{key: value})
+		}
 	case []interface{}:
 		n, err := arrayIndex(prop)
 		if err != nil {
