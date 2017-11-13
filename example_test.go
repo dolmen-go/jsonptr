@@ -54,3 +54,46 @@ func Example() {
 	// "/ "         7
 	// "/m~0n"      8
 }
+
+func ExampleSet() {
+
+	newArray := func() interface{} {
+		return make([]interface{}, 0)
+	}
+
+	newObject := func() interface{} {
+		return make(map[string]interface{})
+	}
+
+	var doc interface{}
+
+	for _, step := range []struct {
+		where string
+		what  interface{}
+	}{
+		{"", newObject},
+		{"/arr", newArray},
+		{"/arr/-", 3},
+		{"/arr/-", 2},
+		{"/arr/-", 1},
+		{"/obj", newObject},
+		{"/obj/str", "hello"},
+		{"/obj/bool", true},
+		{"/arr/-", 0},
+		{"/obj/", nil},
+	} {
+		what := step.what
+		if f, isFunc := what.(func() interface{}); isFunc {
+			what = f()
+		}
+		err := jsonptr.Set(&doc, step.where, what)
+		if err != nil {
+			panic(err)
+		}
+		//fmt.Printf("%#v\n", doc)
+	}
+
+	fmt.Println(func() string { x, _ := json.Marshal(doc); return string(x) }())
+	// Output:
+	// {"arr":[3,2,1,0],"obj":{"":null,"bool":true,"str":"hello"}}
+}
