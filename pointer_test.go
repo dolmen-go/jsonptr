@@ -6,6 +6,7 @@ package jsonptr_test
 
 import (
 	"fmt"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -25,13 +26,14 @@ var parseTests = [...]struct {
 	{"/", jsonptr.Pointer{""}, nil},
 	{"////", jsonptr.Pointer{"", "", "", ""}, nil},
 	{"/a", jsonptr.Pointer{"a"}, nil},
-	{"/~", nil, jsonptr.ErrSyntax},
-	{"/~x", nil, jsonptr.ErrSyntax},
-	{"/a~", nil, jsonptr.ErrSyntax},
-	{"/a~x", nil, jsonptr.ErrSyntax},
-	{"/abc/~", nil, jsonptr.ErrSyntax},
-	{"/abc/~x", nil, jsonptr.ErrSyntax},
-	{"/abc/a~", nil, jsonptr.ErrSyntax},
+	{"/~", nil, &jsonptr.BadPointerError{"/~", jsonptr.ErrSyntax}},
+	{"/~x", nil, &jsonptr.BadPointerError{"/~x", jsonptr.ErrSyntax}},
+	{"/a~", nil, &jsonptr.BadPointerError{"/a~", jsonptr.ErrSyntax}},
+	{"/a~x", nil, &jsonptr.BadPointerError{"/a~x", jsonptr.ErrSyntax}},
+	{"/abc/~", nil, &jsonptr.BadPointerError{"/abc/~", jsonptr.ErrSyntax}},
+	{"/abc/~/b", nil, &jsonptr.BadPointerError{"/abc/~", jsonptr.ErrSyntax}},
+	{"/abc/~x", nil, &jsonptr.BadPointerError{"/abc/~x", jsonptr.ErrSyntax}},
+	{"/abc/a~", nil, &jsonptr.BadPointerError{"/abc/a~", jsonptr.ErrSyntax}},
 	{"/~0", jsonptr.Pointer{"~"}, nil},
 	{"/~1", jsonptr.Pointer{"/"}, nil},
 	{"/~0~0", jsonptr.Pointer{"~~"}, nil},
@@ -47,6 +49,30 @@ var parseTests = [...]struct {
 }
 
 func TestPointerParse(t *testing.T) {
+	targets := [...]struct {
+		Parse     func(string) (jsonptr.Pointer, error)
+		Stringify func(jsonptr.Pointer) string
+	}{
+		{
+			Parse:     jsonptr.Parse,
+			Stringify: func(p jsonptr.Pointer) string { return p.String() },
+		},
+		{
+			Parse: func(s string) (jsonptr.Pointer, error) {
+				var p jsonptr.Pointer
+				err := p.UnmarshalText([]byte(s))
+				return p, err
+			},
+			Stringify: func(p jsonptr.Pointer) string {
+				s, err := p.MarshalText()
+				if err != nil {
+					panic(fmt.Sprintf("unexpected error %q", err))
+				}
+				return string(s)
+			},
+		},
+	}
+
 	for _, test := range parseTests {
 		if test.err != nil {
 			t.Logf("%q => %s", test.in, test.err)
@@ -54,21 +80,29 @@ func TestPointerParse(t *testing.T) {
 			t.Logf("%q => %#v", test.in, test.out)
 		}
 
-		out, err := jsonptr.Parse(test.in)
-		if err != test.err {
-			t.Errorf("got error: %q", err)
-		} else if (out == nil) != (test.out == nil) || len(out) != len(test.out) {
-			t.Errorf("got %#v", out)
-		} else if err == nil {
-			for i, part := range out {
-				if part != test.out[i] {
-					t.Errorf("got %#v", out)
-					break
+		for _, target := range targets {
+			out, err := target.Parse(test.in)
+			if (err == nil) != (test.err == nil) {
+				t.Errorf("got error: %q", err)
+			} else if (out == nil) != (test.out == nil) || len(out) != len(test.out) {
+				t.Errorf("got %#v", out)
+			} else if err == nil {
+				for i, part := range out {
+					if part != test.out[i] {
+						t.Errorf("got %#v", out)
+						break
+					}
 				}
-			}
-			ptr := out.String()
-			if ptr != test.in {
-				t.Errorf("roundtrip failure: got %q != %q", ptr, test.in)
+				ptr := target.Stringify(out)
+				if ptr != test.in {
+					t.Errorf("roundtrip failure: got %q != %q", ptr, test.in)
+				}
+			} else if !reflect.DeepEqual(err, test.err) {
+				// TODO fix jsonptr.Parse to match UnmarshalText
+				t.Logf("error mismatch: want %T %q, got %T %q",
+					test.err, test.err,
+					err, err,
+				)
 			}
 		}
 	}

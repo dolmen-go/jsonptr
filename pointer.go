@@ -5,6 +5,7 @@
 package jsonptr
 
 import (
+	"bytes"
 	"encoding/json"
 	"strconv"
 	"strings"
@@ -32,10 +33,43 @@ func Parse(pointer string) (Pointer, error) {
 	for i, part := range ptr {
 		var err error
 		if ptr[i], err = UnescapeString(part); err != nil {
+			// TODO return the full prefix
 			return nil, err
 		}
 	}
 	return ptr, nil
+}
+
+// MarshalText() implements encoding.TextUnmarshaler
+func (ptr *Pointer) UnmarshalText(text []byte) error {
+	if len(text) == 0 {
+		*ptr = nil
+		return nil
+	}
+	if text[0] != '/' {
+		return ErrSyntax
+	}
+
+	var p Pointer
+	t := text[1:]
+	for {
+		i := bytes.IndexByte(t, '/')
+		if i < 0 {
+			break
+		}
+		part, err := Unescape(t[:i])
+		if err != nil {
+			return syntaxError(string(text[:len(text)-len(t)-i-1]))
+		}
+		p = append(p, string(part))
+		t = t[i+1:]
+	}
+	part, err := Unescape(t)
+	if err != nil {
+		return syntaxError(string(text))
+	}
+	*ptr = append(p, string(part))
+	return nil
 }
 
 // String returns a JSON Pointer string, escaping components when necessary:
@@ -50,6 +84,18 @@ func (ptr Pointer) String() string {
 		dst = AppendEscape(append(dst, '/'), part)
 	}
 	return string(dst)
+}
+
+// MarshalText() implements encoding.TextMarshaler
+func (ptr Pointer) MarshalText() (text []byte, err error) {
+	if len(ptr) == 0 {
+		return nil, nil
+	}
+	dst := make([]byte, 0, 8*len(ptr))
+	for _, part := range ptr {
+		dst = AppendEscape(append(dst, '/'), part)
+	}
+	return dst, nil
 }
 
 // Clone returns a new, independant, copy of the pointer.
