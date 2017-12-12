@@ -60,7 +60,6 @@ code not covered by the testsuite as never tested and full of bugs.
 
 Todo:
 * tests of error cases
-* `Set`: tests of array growth
 * `Delete`
 
 ## License

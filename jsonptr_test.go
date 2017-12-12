@@ -175,6 +175,11 @@ func TestSet(t *testing.T) {
 	checkSet(t, []interface{}{}, `/-`, true, `[true]`)
 	checkSet(t, []interface{}(nil), `/-`, true, `[true]`)
 	checkSet(t, `[]`, `/0`, true, `[true]`)
+	checkSet(t, `[]`, `/1`, true, `[null,true]`)
+	checkSet(t, `[]`, `/2`, true, `[null,null,true]`)
+	checkSet(t, []interface{}(nil), `/2`, true, `[null,null,true]`)
+	checkSet(t, `[0,1]`, `/2`, true, `[0,1,true]`)
+	checkSet(t, `[0,1]`, `/-`, true, `[0,1,true]`)
 	checkSet(t, `{}`, `/ok`, true, `{"ok":true}`)
 	checkSet(t, `{"x":[]}`, `/x/-`, true, `{"x":[true]}`)
 }

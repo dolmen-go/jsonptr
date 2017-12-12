@@ -316,7 +316,7 @@ func Set(doc *interface{}, ptr string, value interface{}) error {
 		//}
 
 		// TODO make+copy
-		for i := n - len(parent) - 1; i > 0; i-- {
+		for i := n - len(parent); i > 0; i-- {
 			parent = append(parent, nil)
 		}
 		parent = append(parent, value)
