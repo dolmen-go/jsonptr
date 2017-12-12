@@ -116,13 +116,16 @@ func TestGet(t *testing.T) {
 	}).runTest()
 }
 
-func checkSet(t *testing.T, jsonIn string, ptr string, value interface{}, jsonOut string) {
-	t.Logf("%v + \"%v\" \"%v\"", jsonIn, ptr, value)
-	var data interface{}
-	if err := json.Unmarshal([]byte(jsonIn), &data); err != nil {
-		t.Logf("Can't unmarshal %v: %s\n", jsonIn, err)
-		t.Fail()
-		return
+func checkSet(t *testing.T, data interface{}, ptr string, value interface{}, jsonOut string) {
+	if jsonIn, isString := data.(string); isString {
+		t.Logf("%v + \"%v\" \"%v\"", jsonIn, ptr, value)
+		if err := json.Unmarshal([]byte(jsonIn), &data); err != nil {
+			t.Logf("Can't unmarshal %v: %s\n", jsonIn, err)
+			t.Fail()
+			return
+		}
+	} else {
+		t.Logf("%#v + \"%v\" \"%v\"", data, ptr, value)
 	}
 
 	err := jsonptr.Set(&data, ptr, value)
@@ -169,6 +172,8 @@ func TestSet(t *testing.T) {
 	checkSet(t, `[null]`, `/0`, true, `[true]`)
 	// Appending
 	checkSet(t, `[]`, `/-`, true, `[true]`)
+	checkSet(t, []interface{}{}, `/-`, true, `[true]`)
+	checkSet(t, []interface{}(nil), `/-`, true, `[true]`)
 	checkSet(t, `[]`, `/0`, true, `[true]`)
 	checkSet(t, `{}`, `/ok`, true, `{"ok":true}`)
 	checkSet(t, `{"x":[]}`, `/x/-`, true, `{"x":[true]}`)
