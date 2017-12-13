@@ -282,10 +282,12 @@ func Set(doc *interface{}, ptr string, value interface{}) error {
 	prop := ptr[p+1:]
 	parentPtr := ptr[:p]
 
-	// FIXME Get called from Set should not allow Decoder and RawMessage
 	parent, err := Get(*doc, parentPtr)
 	if err != nil {
 		return err
+	}
+	if len(parentPtr) == 0 {
+		*doc = parent
 	}
 
 	switch parent := (parent).(type) {

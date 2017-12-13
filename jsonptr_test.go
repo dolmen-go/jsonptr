@@ -118,6 +118,9 @@ func TestGet(t *testing.T) {
 
 func checkSet(t *testing.T, data interface{}, ptr string, value interface{}, jsonOut string) {
 	if jsonIn, isString := data.(string); isString {
+		// Same test with input converted to a RawMessage
+		checkSet(t, json.RawMessage(jsonIn), ptr, value, jsonOut)
+
 		t.Logf("%v + \"%v\" \"%v\"", jsonIn, ptr, value)
 		if err := json.Unmarshal([]byte(jsonIn), &data); err != nil {
 			t.Logf("Can't unmarshal %v: %s\n", jsonIn, err)
