@@ -98,8 +98,8 @@ func (ptr Pointer) MarshalText() (text []byte, err error) {
 	return dst, nil
 }
 
-// Clone returns a new, independant, copy of the pointer.
-func (ptr Pointer) Clone() Pointer {
+// Copy returns a new, independant, copy of the pointer.
+func (ptr Pointer) Copy() Pointer {
 	return append(Pointer{}, ptr...)
 }
 

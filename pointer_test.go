@@ -265,7 +265,7 @@ func TestPointer(t *testing.T) {
 		}
 
 		r = nil
-		r = p.Clone()
+		r = p.Copy()
 		if r.String() != test.expected {
 			t.Errorf("Clone error: got %s, expected %s", r.String(), test.expected)
 		} else {
@@ -326,7 +326,7 @@ func ExamplePointer_navigation() {
 
 func TestPointerClone(t *testing.T) {
 	orig := jsonptr.Pointer{"foo"}
-	clone := orig.Clone()
+	clone := orig.Copy()
 	if clone.String() != "/foo" {
 		t.Errorf("Failure!")
 	}
