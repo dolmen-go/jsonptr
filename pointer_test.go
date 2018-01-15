@@ -185,11 +185,23 @@ func TestPointer(t *testing.T) {
 		up = p.Up
 
 		property = func(name string) func() *jsonptr.Pointer {
-			return func() *jsonptr.Pointer { return p.Property(name) }
+			return func() *jsonptr.Pointer {
+				q := p.Property(name)
+				if q.LeafName() != name {
+					panic("LeafName() mismatch")
+				}
+				return q
+			}
 		}
 
 		index = func(i int) func() *jsonptr.Pointer {
-			return func() *jsonptr.Pointer { return p.Index(i) }
+			return func() *jsonptr.Pointer {
+				q := p.Index(i)
+				if j, err := q.LeafIndex(); err != nil || j != i {
+					panic("LeafIndex() mismatch")
+				}
+				return q
+			}
 		}
 
 		chain = func(moves ...func() *jsonptr.Pointer) func() *jsonptr.Pointer {

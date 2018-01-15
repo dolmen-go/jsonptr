@@ -152,6 +152,17 @@ func (ptr *Pointer) Index(index int) *Pointer {
 	return ptr.Property(prop)
 }
 
+// LeafName returns the name of the last part of the pointer.
+func (ptr Pointer) LeafName() string {
+	return ptr[len(ptr)-1]
+}
+
+// LeafIndex returns the last part of the pointer as an array index.
+// -1 is returned for "-".
+func (ptr Pointer) LeafIndex() (int, error) {
+	return arrayIndex(ptr.LeafName())
+}
+
 // In returns the value from doc pointed by ptr.
 //
 // doc may be a deserialized document, or a json.RawMessage.
