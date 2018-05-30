@@ -100,7 +100,7 @@ func (ptr Pointer) MarshalText() (text []byte, err error) {
 
 // Copy returns a new, independant, copy of the pointer.
 func (ptr Pointer) Copy() Pointer {
-	return append(Pointer{}, ptr...)
+	return append(Pointer(nil), ptr...)
 }
 
 // IsRoot returns true if the pointer is at root (empty).
