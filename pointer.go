@@ -121,10 +121,11 @@ func (ptr Pointer) IsRoot() bool {
 //
 // Panics if already at root.
 func (ptr *Pointer) Up() *Pointer {
-	if ptr.IsRoot() {
+	last := len(*ptr) - 1
+	if last < 0 {
 		panic(ErrRoot)
 	}
-	*ptr = (*ptr)[:len(*ptr)-1]
+	*ptr = (*ptr)[:last:last]
 	return ptr
 }
 
@@ -137,7 +138,7 @@ func (ptr *Pointer) Pop() string {
 		panic(ErrRoot)
 	}
 	prop := (*ptr)[last]
-	*ptr = (*ptr)[:last]
+	*ptr = (*ptr)[:last:last]
 	return prop
 }
 
