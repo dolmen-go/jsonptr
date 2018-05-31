@@ -7,6 +7,8 @@ go:
 - "tip"
 sudo: false
 
+go_import_path: github.com/dolmen-go/jsonptr
+
 before_install:
 - go get -t -v ./...
 
