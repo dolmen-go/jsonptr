@@ -98,6 +98,14 @@ func (ptr Pointer) MarshalText() (text []byte, err error) {
 	return dst, nil
 }
 
+// Grow allows to prepare space for growth (before use of Property/Index).
+func (ptr *Pointer) Grow(n int) {
+	if cap(*ptr) >= len(*ptr)+n {
+		return
+	}
+	*ptr = append(make(Pointer, 0, len(*ptr)+n), *ptr...)
+}
+
 // Copy returns a new, independant, copy of the pointer.
 func (ptr Pointer) Copy() Pointer {
 	return append(Pointer(nil), ptr...)
