@@ -180,15 +180,12 @@ func (ptr Pointer) In(doc interface{}) (interface{}, error) {
 		case map[string]interface{}:
 			var ok bool
 			if doc, ok = here[key]; !ok {
-				return nil, propertyError(ptr[:i].String())
+				return nil, propertyError(ptr[:i+1].String())
 			}
 		case []interface{}:
 			n, err := arrayIndex(key)
-			if err != nil {
-				return nil, &PtrError{ptr[:i].String(), err}
-			}
-			if n < 0 || n >= len(here) {
-				return nil, indexError(ptr[:i].String())
+			if err != nil || n < 0 || n >= len(here) {
+				return nil, indexError(ptr[:i+1].String())
 			}
 			doc = here[n]
 		case JSONDecoder:
