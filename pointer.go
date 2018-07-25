@@ -218,3 +218,10 @@ func (ptr Pointer) Set(pdoc *interface{}, value interface{}) error {
 	// TODO Make an optimised implementation
 	return Set(pdoc, ptr.String(), value)
 }
+
+// Delete removes an object property or an array element (and shifts remaining ones).
+// It can't be applied on root.
+func (ptr Pointer) Delete(pdoc *interface{}) (interface{}, error) {
+	// TODO Make an optimised implementation
+	return Delete(pdoc, ptr.String())
+}

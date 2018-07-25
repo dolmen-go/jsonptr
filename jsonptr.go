@@ -332,3 +332,58 @@ func Set(doc *interface{}, ptr string, value interface{}) error {
 
 	return nil
 }
+
+// Delete removes an object property or an array element (and shifts remaining ones).
+// It can't be applied on root.
+func Delete(pdoc *interface{}, ptr string) (interface{}, error) {
+	if len(ptr) == 0 {
+		return nil, &BadPointerError{ptr, ErrDeleteRoot}
+	}
+
+	p := strings.LastIndexByte(ptr, '/')
+	if p < 0 {
+		return nil, syntaxError(ptr)
+	}
+	prop := ptr[p+1:]
+	parentPtr := ptr[:p]
+
+	parent, err := Get(*pdoc, parentPtr)
+	if err != nil {
+		return nil, err
+	}
+
+	switch parent := (parent).(type) {
+	case map[string]interface{}:
+		key, err := UnescapeString(prop)
+		if err != nil {
+			return nil, &BadPointerError{ptr, err}
+		}
+		v, found := parent[key]
+		if !found {
+			return nil, propertyError(ptr)
+		}
+		delete(parent, key)
+		return v, nil
+	case []interface{}:
+		n, err := arrayIndex(prop)
+		if err != nil {
+			return nil, &BadPointerError{ptr, err}
+		}
+		/*
+			// FIXME what should be the baviour for '-'?
+			if n == -1 {
+				n = len(parent)-1
+			}
+		*/
+		if n < 0 {
+			return nil, &BadPointerError{ptr, ErrIndex}
+		} else if n >= len(parent) {
+			return nil, &BadPointerError{ptr, ErrIndex}
+		}
+		v := parent[n]
+		copy(parent[n:], parent[n+1:])
+		return v, Set(pdoc, parentPtr, parent[:len(parent)-1])
+	default:
+		return nil, docError(parentPtr, parent)
+	}
+}

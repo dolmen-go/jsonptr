@@ -18,6 +18,8 @@ var (
 
 	ErrRoot = errors.New("can't go up from root")
 
+	ErrDeleteRoot = errors.New("can't delete root")
+
 	ErrUsage = errors.New("invalid use of jsonptr.UnescapeString on string with '/'")
 )
 
