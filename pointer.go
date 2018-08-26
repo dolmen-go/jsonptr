@@ -7,6 +7,7 @@ package jsonptr
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"strconv"
 	"strings"
 )
@@ -38,6 +39,15 @@ func Parse(pointer string) (Pointer, error) {
 		}
 	}
 	return ptr, nil
+}
+
+// MustParse wraps Parse and panics in case of error.
+func MustParse(pointer string) Pointer {
+	ptr, err := Parse(pointer)
+	if err != nil {
+		panic(fmt.Errorf("%q: %v", pointer, err))
+	}
+	return ptr
 }
 
 // MarshalText() implements encoding.TextUnmarshaler
