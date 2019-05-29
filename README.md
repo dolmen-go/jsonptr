@@ -44,9 +44,9 @@ func main() {
 
     val, err := jsonptr.Get(document, `/a/0`)
     if err != nil {
-        fmt.Printf("Got: %v\n", val)
-    } else {
         fmt.Printf("Error: %s\n", err)
+    } else {
+        fmt.Printf("Got: %v\n", val)
     }
 }
 ```
