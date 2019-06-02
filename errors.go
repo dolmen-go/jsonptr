@@ -41,6 +41,11 @@ func (e *BadPointerError) Error() string {
 	return strconv.Quote(e.BadPtr) + ": " + e.Err.Error()
 }
 
+// Unwrap implements the errors.Wrapper interface.
+func (e *BadPointerError) Unwrap() error {
+	return e.Err
+}
+
 func (e *BadPointerError) rebase(base string) {
 	if e != nil {
 		e.BadPtr = base + e.BadPtr
@@ -51,17 +56,22 @@ func syntaxError(ptr string) *BadPointerError {
 	return &BadPointerError{ptr, ErrSyntax}
 }
 
-// PtrError signals JSON Pointer navigation errors
+// PtrError signals JSON Pointer navigation errors.
 type PtrError struct {
-	// Ptr is the substring of the original pointer where the error occurred
+	// Ptr is the substring of the original pointer where the error occurred.
 	Ptr string
-	// Err is one of ErrIndex, ErrProperty
+	// Err is one of ErrIndex, ErrProperty.
 	Err error
 }
 
 // Error implements the 'error' interface
 func (e *PtrError) Error() string {
 	return strconv.Quote(e.Ptr) + ": " + e.Err.Error()
+}
+
+// Unwrap implements the errors.Wrapper interface.
+func (e *PtrError) Unwrap() error {
+	return e.Err
 }
 
 func (e *PtrError) rebase(base string) {
@@ -87,6 +97,11 @@ type DocumentError struct {
 // Error implements the 'error' interface
 func (e *DocumentError) Error() string {
 	return e.Err.Error()
+}
+
+// Unwrap implements the errors.Wrapper interface.
+func (e *DocumentError) Unwrap() error {
+	return e.Err
 }
 
 func (e *DocumentError) rebase(base string) {
