@@ -39,7 +39,7 @@ func main() {
     document := map[string]interface{}{
         "a": []interface{}{
             1,
-        }
+        },
     }
 
     val, err := jsonptr.Get(document, `/a/0`)
