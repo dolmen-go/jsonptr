@@ -7,6 +7,8 @@ package jsonptr_test
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
+	"testing/iotest"
 
 	"github.com/dolmen-go/jsonptr"
 )
@@ -57,6 +59,17 @@ func Example() {
 	// "/k\"l"      6
 	// "/ "         7
 	// "/m~0n"      8
+}
+
+// ExampleJSONDecoder shows how to extract from a streamed JSON document.
+func ExampleJSONDecoder() {
+	stream := iotest.OneByteReader(strings.NewReader(`{"a": 42,"b":5}`))
+	decoder := json.NewDecoder(stream)
+
+	result, _ := jsonptr.Get(decoder, "/a")
+	fmt.Println(result)
+	// Output:
+	// 42
 }
 
 func ExampleSet() {
