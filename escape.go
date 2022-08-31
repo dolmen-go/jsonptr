@@ -55,8 +55,9 @@ func AppendEscape(dst []byte, name string) []byte {
 }
 
 // EscapeString escapes a property name with JSON Pointer escapes:
-//  '~' => `~0`
-//  '/' => `~1`
+//
+//	'~' => `~0`
+//	'/' => `~1`
 func EscapeString(name string) string {
 	var shift int
 	for i := 0; i < len(name); i++ {
@@ -93,8 +94,10 @@ func EscapeString(name string) string {
 }
 
 // Unescape unescapes a property name in place:
-//  `~1` => '/'
-//  `~0` => '~'
+//
+//	`~1` => '/'
+//	`~0` => '~'
+//
 // Any '~' followed by something else (or nothing) is an error ErrSyntax.
 // Any '/' is an error ErrSyntax.
 func Unescape(b []byte) ([]byte, error) {
@@ -143,8 +146,10 @@ Loop:
 }
 
 // UnescapeString unescapes a property name:
-//  `~1` => '/'
-//  `~0` => '~'
+//
+//	`~1` => '/'
+//	`~0` => '~'
+//
 // Any '~' followed by something else (or nothing) is an error ErrSyntax.
 // If the input contains '/' the result is undefined (may panic).
 func UnescapeString(token string) (string, error) {

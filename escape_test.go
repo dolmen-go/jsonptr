@@ -37,7 +37,7 @@ func ExampleUnescapeString_error() {
 func TestEscape(t *testing.T) {
 	buffers := [][]byte{
 		nil,
-		[]byte{},
+		{},
 		make([]byte, 0, 1),
 		make([]byte, 0, 2),
 		make([]byte, 0, 3),
