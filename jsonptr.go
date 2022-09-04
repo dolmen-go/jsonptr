@@ -55,7 +55,7 @@ func arrayIndex(token string) (int, error) {
 	return n, nil
 }
 
-// JSONDecoder is a subset of the interface of encoding/json.Decoder.
+// JSONDecoder is a subset of the interface of [encoding/json.Decoder].
 // It can be used as an input to Get().
 type JSONDecoder interface {
 	Token() (json.Token, error)
@@ -199,8 +199,8 @@ func getLeaf(doc interface{}) (interface{}, ptrError) {
 //
 // doc may be:
 //   - a deserialized document made of []interface{}, map[string]interface{} or any terminal value
-//   - a json.RawMessage
-//   - a JSONDecoder (such as *json.Decoder) for streamed decoding
+//   - a [encoding/json.RawMessage]
+//   - a JSONDecoder (such as *[encoding/json.Decoder]) for streamed decoding
 //
 // In case of error a PtrError is returned.
 func Get(doc interface{}, ptr string) (interface{}, error) {
