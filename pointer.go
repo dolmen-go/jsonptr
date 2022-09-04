@@ -50,7 +50,7 @@ func MustParse(pointer string) Pointer {
 	return ptr
 }
 
-// MarshalText() implements encoding.TextUnmarshaler
+// MarshalText implements [encoding.TextUnmarshaler].
 func (ptr *Pointer) UnmarshalText(text []byte) error {
 	if len(text) == 0 {
 		*ptr = nil
@@ -96,7 +96,7 @@ func (ptr Pointer) String() string {
 	return string(dst)
 }
 
-// MarshalText() implements encoding.TextMarshaler
+// MarshalText implements [encoding.TextMarshaler].
 func (ptr Pointer) MarshalText() (text []byte, err error) {
 	if len(ptr) == 0 {
 		return nil, nil
@@ -108,7 +108,7 @@ func (ptr Pointer) MarshalText() (text []byte, err error) {
 	return dst, nil
 }
 
-// Grow allows to prepare space for growth (before use of Property/Index).
+// Grow allows to prepare space for growth (before use of [Pointer.Property]/[Pointer.Index]).
 func (ptr *Pointer) Grow(n int) {
 	if cap(*ptr) >= len(*ptr)+n {
 		return
