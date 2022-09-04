@@ -1,4 +1,4 @@
-// Copyright 2016-2020 Olivier Mengué. All rights reserved.
+// Copyright 2016-2022 Olivier Mengué. All rights reserved.
 // Use of this source code is governed by the Apache 2.0 license that
 // can be found in the LICENSE file.
 
@@ -41,7 +41,7 @@ func (e *BadPointerError) Error() string {
 	return strconv.Quote(e.BadPtr) + ": " + e.Err.Error()
 }
 
-// Unwrap implements the errors.Wrapper interface.
+// Unwrap allows to unwrap the error (see [errors.Unwrap]).
 func (e *BadPointerError) Unwrap() error {
 	return e.Err
 }
@@ -69,7 +69,7 @@ func (e *PtrError) Error() string {
 	return strconv.Quote(e.Ptr) + ": " + e.Err.Error()
 }
 
-// Unwrap implements the errors.Wrapper interface.
+// Unwrap allows to unwrap the error (see [errors.Unwrap]).
 func (e *PtrError) Unwrap() error {
 	return e.Err
 }
@@ -94,12 +94,12 @@ type DocumentError struct {
 	Err error
 }
 
-// Error implements the 'error' interface
+// Error implements the 'error' interface.
 func (e *DocumentError) Error() string {
 	return e.Err.Error()
 }
 
-// Unwrap implements the errors.Wrapper interface.
+// Unwrap allows to unwrap the error (see [errors.Unwrap]).
 func (e *DocumentError) Unwrap() error {
 	return e.Err
 }
