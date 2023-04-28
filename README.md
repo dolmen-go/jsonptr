@@ -1,7 +1,7 @@
 # jsonptr - JSON Pointer ([RFC 6901](https://tools.ietf.org/html/rfc6901)) for Go
 
 [![GoDoc](https://img.shields.io/badge/godoc-reference-blue.svg)](https://godoc.org/github.com/dolmen-go/jsonptr)
-[![Travis-CI](https://api.travis-ci.org/dolmen-go/jsonptr.svg?branch=master)](https://travis-ci.org/dolmen-go/jsonptr)
+[![codecov](https://codecov.io/gh/dolmen-go/jsonptr/branch/master/graph/badge.svg?token=tdH8IAOTo7)](https://codecov.io/gh/dolmen-go/jsonptr)
 [![Go Report Card](https://goreportcard.com/badge/github.com/dolmen-go/jsonptr)](https://goreportcard.com/report/github.com/dolmen-go/jsonptr)
 
 ## Features
