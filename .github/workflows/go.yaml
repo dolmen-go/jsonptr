@@ -32,11 +32,12 @@ jobs:
         go-version: ${{ matrix.go }}
 
     - name: Test
-      run: go test -race -v -coverprofile=coverage.txt -covermode=atomic ./...
+      run: go test -race -v -coverprofile=coverage.out -covermode=atomic ./...
 
     # https://app.codecov.io/github.com/dolmen-go/jsonptr
     - name: Upload coverage to Codecov
       if: matrix.go == env.go_latest
       uses: codecov/codecov-action@v4
       with:
+        # https://github.com/dolmen-go/jsonptr/settings/secrets/actions
         token: ${{ secrets.CODECOV_TOKEN }}
