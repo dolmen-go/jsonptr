@@ -31,12 +31,13 @@ func Parse(pointer string) (Pointer, error) {
 	if strings.IndexByte(pointer, '~') == -1 {
 		return ptr, nil
 	}
+	p := 1
 	for i, part := range ptr {
 		var err error
 		if ptr[i], err = UnescapeString(part); err != nil {
-			// TODO return the full prefix
-			return nil, err
+			return nil, syntaxError(pointer[:p+len(part)])
 		}
+		p += len(part) + 1
 	}
 	return ptr, nil
 }
