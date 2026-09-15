@@ -46,7 +46,7 @@ jobs:
       with:
         disable_search: true
         files: ./.coverage.out
-        disable_teleme: true
+        disable_telem: true
         report_type: coverage
         fail_ci_if_error: true
         # https://app.codecov.io/gh/dolmen-go/jsonptr/config/general
