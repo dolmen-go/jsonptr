@@ -289,11 +289,47 @@ func Get(doc interface{}, ptr string) (interface{}, error) {
 	return doc, err
 }
 
+// decodeLayer decodes only the outer layer of a raw JSON value: an object is
+// decoded as a map[string]json.RawMessage, an array as a []json.RawMessage
+// (the members are kept raw), and any other value is fully decoded.
+func decodeLayer(raw json.RawMessage) (interface{}, error) {
+	// Skip leading JSON whitespace to find the kind of value
+	i := 0
+	for i < len(raw) && (raw[i] == ' ' || raw[i] == '\t' || raw[i] == '\n' || raw[i] == '\r') {
+		i++
+	}
+	if i < len(raw) {
+		switch raw[i] {
+		case '{':
+			var m map[string]json.RawMessage
+			if err := json.Unmarshal(raw, &m); err != nil {
+				return nil, err
+			}
+			return m, nil
+		case '[':
+			var s []json.RawMessage
+			if err := json.Unmarshal(raw, &s); err != nil {
+				return nil, err
+			}
+			return s, nil
+		}
+	}
+	var v interface{}
+	if err := json.Unmarshal(raw, &v); err != nil {
+		return nil, err
+	}
+	return v, nil
+}
+
 // materialize walks *pdoc along ptr[p:] (ptr[:p] is the already walked part)
 // and replaces in place any [encoding/json.RawMessage] or JSONDecoder found on
 // the way (including at the end of the path) by its decoded value.
 // Once done, the value at ptr (if any) is attached to the tree at *pdoc and
 // can be modified in place.
+//
+// Decoding is layered (see decodeLayer): a raw object or array is decoded as a
+// map[string]json.RawMessage or []json.RawMessage, so only the containers on
+// the path are decoded and the values outside the path are kept raw.
 //
 // A map[string]json.RawMessage or []json.RawMessage traversed on the way is
 // converted to map[string]interface{} or []interface{} (only the traversed
@@ -305,14 +341,18 @@ func Get(doc interface{}, ptr string) (interface{}, error) {
 func materialize(pdoc *interface{}, ptr string, p int) error {
 	switch raw := (*pdoc).(type) {
 	case json.RawMessage:
-		var v interface{}
-		if err := json.Unmarshal(raw, &v); err != nil {
+		v, err := decodeLayer(raw)
+		if err != nil {
 			return jsonError(ptr[:p], err)
 		}
 		*pdoc = v
 	case JSONDecoder:
-		var v interface{}
-		if err := raw.Decode(&v); err != nil {
+		var r json.RawMessage
+		if err := raw.Decode(&r); err != nil {
+			return jsonError(ptr[:p], err)
+		}
+		v, err := decodeLayer(r)
+		if err != nil {
 			return jsonError(ptr[:p], err)
 		}
 		*pdoc = v
@@ -401,7 +441,10 @@ func rawValue(value interface{}) (json.RawMessage, error) {
 // Set modifies a JSON-like data tree.
 //
 // Any [encoding/json.RawMessage] or JSONDecoder on the path to the value
-// is replaced in the tree by its decoded value.
+// is replaced in the tree by its decoded value. Decoding is lazy: a raw object
+// or array is decoded as a map[string]json.RawMessage or a []json.RawMessage,
+// so only the containers on the path are decoded and the values outside the
+// path are kept raw.
 //
 // If the container of the value is a map[string]json.RawMessage or a
 // []json.RawMessage, value is stored as a json.RawMessage: as-is if it is
@@ -506,7 +549,10 @@ func Set(doc *interface{}, ptr string, value interface{}) error {
 // It can't be applied on root.
 //
 // Any [encoding/json.RawMessage] or JSONDecoder on the path to the value
-// is replaced in the tree by its decoded value.
+// is replaced in the tree by its decoded value, lazily as in [Set].
+// A value deleted from a map[string]json.RawMessage or []json.RawMessage
+// (including one resulting from that lazy decoding) is returned as the
+// json.RawMessage stored in it.
 func Delete(pdoc *interface{}, ptr string) (interface{}, error) {
 	if len(ptr) == 0 {
 		return nil, &BadPointerError{ptr, ErrDeleteRoot}
