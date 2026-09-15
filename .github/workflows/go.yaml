@@ -30,10 +30,10 @@ jobs:
     steps:
 
     - name: Check out code into the Go module directory
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
 
     - name: Set up Go ${{ matrix.go }}
-      uses: actions/setup-go@v5
+      uses: actions/setup-go@v7
       with:
         go-version: ${{ matrix.go }}
 
@@ -43,7 +43,7 @@ jobs:
     # https://app.codecov.io/github.com/dolmen-go/jsonptr
     - name: Upload coverage to Codecov
       if: matrix.go == env.go_latest
-      uses: codecov/codecov-action@v4
+      uses: codecov/codecov-action@v7
       with:
         # https://github.com/dolmen-go/jsonptr/settings/secrets/actions
         token: ${{ secrets.CODECOV_TOKEN }}
