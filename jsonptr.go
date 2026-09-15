@@ -324,7 +324,7 @@ func decodeLayer(raw json.RawMessage) (interface{}, error) {
 // materialize walks *pdoc along ptr[p:] (ptr[:p] is the already walked part)
 // and replaces in place any [encoding/json.RawMessage] or JSONDecoder found on
 // the way (including at the end of the path) by its decoded value.
-// Once done, the value at ptr (if any) is attached to the tree at *pdoc and
+// The value at ptr is returned: it is attached to the tree at *pdoc and
 // can be modified in place.
 //
 // Decoding is layered (see decodeLayer): a raw object or array is decoded as a
@@ -336,30 +336,29 @@ func decodeLayer(raw json.RawMessage) (interface{}, error) {
 // element is decoded, the others are kept raw), as the decoded element must be
 // stored in it. One at the end of the path is left untouched.
 //
-// Only JSON decoding errors are reported: navigation errors are left for Get
-// to report.
-func materialize(pdoc *interface{}, ptr string, p int) error {
+// Errors are reported like Get does.
+func materialize(pdoc *interface{}, ptr string, p int) (interface{}, error) {
 	switch raw := (*pdoc).(type) {
 	case json.RawMessage:
 		v, err := decodeLayer(raw)
 		if err != nil {
-			return jsonError(ptr[:p], err)
+			return nil, jsonError(ptr[:p], err)
 		}
 		*pdoc = v
 	case JSONDecoder:
 		var r json.RawMessage
 		if err := raw.Decode(&r); err != nil {
-			return jsonError(ptr[:p], err)
+			return nil, jsonError(ptr[:p], err)
 		}
 		v, err := decodeLayer(r)
 		if err != nil {
-			return jsonError(ptr[:p], err)
+			return nil, jsonError(ptr[:p], err)
 		}
 		*pdoc = v
 	}
 
 	if p >= len(ptr) {
-		return nil
+		return *pdoc, nil
 	}
 	// ptr[p] == '/'
 	p++
@@ -374,43 +373,49 @@ func materialize(pdoc *interface{}, ptr string, p int) error {
 	case map[string]interface{}:
 		key, err := UnescapeString(token)
 		if err != nil {
-			return nil
+			return nil, &BadPointerError{ptr[:p], err}
 		}
-		v, ok := here[key]
+		child, ok := here[key]
 		if !ok {
-			return nil
+			return nil, propertyError(ptr[:p])
 		}
-		err = materialize(&v, ptr, p)
-		here[key] = v
-		return err
+		v, err := materialize(&child, ptr, p)
+		here[key] = child
+		return v, err
 	case []interface{}:
 		n, err := arrayIndex(token)
-		if err != nil || n < 0 || n >= len(here) {
-			return nil
+		if err != nil {
+			return nil, &BadPointerError{ptr[:p], err}
+		}
+		if n < 0 || n >= len(here) {
+			return nil, indexError(ptr[:p])
 		}
 		return materialize(&here[n], ptr, p)
 	case map[string]json.RawMessage:
 		key, err := UnescapeString(token)
 		if err != nil {
-			return nil
+			return nil, &BadPointerError{ptr[:p], err}
 		}
 		raw, ok := here[key]
 		if !ok {
-			return nil
+			return nil, propertyError(ptr[:p])
 		}
 		m := make(map[string]interface{}, len(here))
 		for k, v := range here {
 			m[k] = v
 		}
 		*pdoc = m
-		var v interface{} = raw
-		err = materialize(&v, ptr, p)
-		m[key] = v
-		return err
+		var child interface{} = raw
+		v, err := materialize(&child, ptr, p)
+		m[key] = child
+		return v, err
 	case []json.RawMessage:
 		n, err := arrayIndex(token)
-		if err != nil || n < 0 || n >= len(here) {
-			return nil
+		if err != nil {
+			return nil, &BadPointerError{ptr[:p], err}
+		}
+		if n < 0 || n >= len(here) {
+			return nil, indexError(ptr[:p])
 		}
 		s := make([]interface{}, len(here))
 		for i, v := range here {
@@ -418,8 +423,9 @@ func materialize(pdoc *interface{}, ptr string, p int) error {
 		}
 		*pdoc = s
 		return materialize(&s[n], ptr, p)
+	default:
+		return nil, docError(ptr[:p], *pdoc)
 	}
-	return nil
 }
 
 // rawValue returns value as a [encoding/json.RawMessage] for storing it into
@@ -463,10 +469,7 @@ func Set(doc *interface{}, ptr string, value interface{}) error {
 	prop := ptr[p+1:]
 	parentPtr := ptr[:p]
 
-	if err := materialize(doc, parentPtr, 0); err != nil {
-		return err
-	}
-	parent, err := Get(*doc, parentPtr)
+	parent, err := materialize(doc, parentPtr, 0)
 	if err != nil {
 		return err
 	}
@@ -565,10 +568,7 @@ func Delete(pdoc *interface{}, ptr string) (interface{}, error) {
 	prop := ptr[p+1:]
 	parentPtr := ptr[:p]
 
-	if err := materialize(pdoc, parentPtr, 0); err != nil {
-		return nil, err
-	}
-	parent, err := Get(*pdoc, parentPtr)
+	parent, err := materialize(pdoc, parentPtr, 0)
 	if err != nil {
 		return nil, err
 	}

@@ -462,13 +462,25 @@ func TestSet(t *testing.T) {
 		t.Errorf("raw scalar: got %#v", doc)
 	}
 
-	// Errors with partially deserialized containers
+	// Navigation errors on the path to the parent
 	for _, test := range []struct {
 		doc   interface{}
 		ptr   string
 		value interface{}
 		err   error
 	}{
+		{map[string]interface{}{}, `/~2/x`, 1, jsonptr.ErrSyntax},
+		{map[string]interface{}{}, `/a/x`, 1, jsonptr.ErrProperty},
+		{map[string]interface{}{"a": 1}, `/a/x`, 1, nil}, // DocumentError
+		{[]interface{}{}, `/x/y`, 1, jsonptr.ErrSyntax},
+		{[]interface{}{}, `/0/y`, 1, jsonptr.ErrIndex},
+		{[]interface{}{}, `/-/y`, 1, jsonptr.ErrIndex},
+		{[]interface{}{1}, `/0/y`, 1, nil}, // DocumentError
+		{map[string]json.RawMessage{}, `/~2/x`, 1, jsonptr.ErrSyntax},
+		{[]json.RawMessage{}, `/x/y`, 1, jsonptr.ErrSyntax},
+		{json.NewDecoder(strings.NewReader(`{`)), `/a`, 1, nil},     // DocumentError
+		{json.NewDecoder(strings.NewReader(`[x]`)), `/0/a`, 1, nil}, // DocumentError
+		// Errors with partially deserialized containers
 		{map[string]json.RawMessage{}, `/~2`, 1, jsonptr.ErrSyntax},
 		{map[string]json.RawMessage{}, `/a`, make(chan int), nil}, // DocumentError
 		{map[string]json.RawMessage{}, `/a/b`, 1, jsonptr.ErrProperty},
