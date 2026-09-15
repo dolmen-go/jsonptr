@@ -162,7 +162,7 @@ func (ptr Pointer) LeafIndex() (int, error) {
 
 // In returns the value from doc pointed by ptr.
 //
-// doc may be a deserialized document, or a [encoding/json.RawMessage].
+// doc may be any document accepted by [Get].
 func (ptr Pointer) In(doc interface{}) (interface{}, error) {
 	for i, key := range ptr {
 		switch here := (doc).(type) {
@@ -172,6 +172,17 @@ func (ptr Pointer) In(doc interface{}) (interface{}, error) {
 				return nil, propertyError(ptr[:i+1].String())
 			}
 		case []interface{}:
+			n, err := arrayIndex(key)
+			if err != nil || n < 0 || n >= len(here) {
+				return nil, indexError(ptr[:i+1].String())
+			}
+			doc = here[n]
+		case map[string]json.RawMessage:
+			var ok bool
+			if doc, ok = here[key]; !ok {
+				return nil, propertyError(ptr[:i+1].String())
+			}
+		case []json.RawMessage:
 			n, err := arrayIndex(key)
 			if err != nil || n < 0 || n >= len(here) {
 				return nil, indexError(ptr[:i+1].String())

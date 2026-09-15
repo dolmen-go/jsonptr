@@ -21,64 +21,67 @@ type getTester struct {
 	Get func(interface{}, string) (interface{}, error)
 }
 
-func (tester *getTester) checkGet(jsonData string, ptr string, expected interface{}) {
-	t := tester.t
-	t.Logf("%v => \"%v\"", jsonData, ptr)
-	var data interface{}
-	if err := json.Unmarshal([]byte(jsonData), &data); err != nil {
-		t.Logf("Can't unmarshal %v: %s\n", jsonData, err)
-		t.Fail()
-		return
-	}
-
-	// Get from a deserialized structure
-	got, err := tester.Get(data, ptr)
-	if err != nil {
-		t.Fatalf("  unexpected error: %s\n", err)
-		return
-	}
-	if !reflect.DeepEqual(got, expected) {
-		t.Fatalf("Result error!\n  expected: %T %v\n       got: %T %v\n", expected, expected, got, got)
-		return
-	}
-
-	// Get from the raw JSON document
-	got, err = tester.Get(json.RawMessage(jsonData), ptr)
-	if err != nil {
-		t.Fatalf("  unexpected error: %s\n", err)
-		return
-	}
-	if !reflect.DeepEqual(got, expected) {
-		t.Fatalf("Result error!\n  expected: %T %v\n       got: %T %v\n", expected, expected, got, got)
-	}
-
-	// Get from the raw JSON document
-	got, err = tester.Get(json.NewDecoder(strings.NewReader(jsonData)), ptr)
-	if err != nil {
-		t.Fatalf("  unexpected error: %s\n", err)
-		return
-	}
-	if !reflect.DeepEqual(got, expected) {
-		t.Fatalf("Result error!\n  expected: %T %v\n       got: %T %v\n", expected, expected, got, got)
-	}
-}
-
-// checkGetError checks that tester.Get fails with a PtrError wrapping
-// expectedErr located at expectedPtr, for the same document given as a
-// deserialized structure, as a json.RawMessage and as a *json.Decoder.
-func (tester *getTester) checkGetError(jsonData string, ptr string, expectedErr error, expectedPtr string) {
-	t := tester.t
-	t.Logf("%v => \"%v\" (error expected)", jsonData, ptr)
+// docForms returns the same JSON document in all the forms accepted by Get:
+// fully deserialized, raw, streamed, and partially deserialized
+// (map[string]json.RawMessage or []json.RawMessage) when the document is an
+// object or an array.
+//
+// The partially deserialized forms are omitted for the root pointer as Get
+// would return them as-is, which is not comparable with the expected value.
+func docForms(t *testing.T, jsonData string, ptr string) []interface{} {
 	var data interface{}
 	if err := json.Unmarshal([]byte(jsonData), &data); err != nil {
 		t.Fatalf("Can't unmarshal %v: %s\n", jsonData, err)
 	}
-
-	for _, doc := range []interface{}{
+	docs := []interface{}{
 		data,
 		json.RawMessage(jsonData),
 		json.NewDecoder(strings.NewReader(jsonData)),
-	} {
+	}
+	if ptr == "" {
+		return docs
+	}
+	switch data.(type) {
+	case map[string]interface{}:
+		var partial map[string]json.RawMessage
+		if err := json.Unmarshal([]byte(jsonData), &partial); err != nil {
+			t.Fatalf("Can't unmarshal %v: %s\n", jsonData, err)
+		}
+		docs = append(docs, partial)
+	case []interface{}:
+		var partial []json.RawMessage
+		if err := json.Unmarshal([]byte(jsonData), &partial); err != nil {
+			t.Fatalf("Can't unmarshal %v: %s\n", jsonData, err)
+		}
+		docs = append(docs, partial)
+	}
+	return docs
+}
+
+func (tester *getTester) checkGet(jsonData string, ptr string, expected interface{}) {
+	t := tester.t
+	t.Logf("%v => \"%v\"", jsonData, ptr)
+
+	for _, doc := range docForms(t, jsonData, ptr) {
+		got, err := tester.Get(doc, ptr)
+		if err != nil {
+			t.Errorf("  %T: unexpected error: %s", doc, err)
+			continue
+		}
+		if !reflect.DeepEqual(got, expected) {
+			t.Errorf("  %T: result error!\n  expected: %T %v\n       got: %T %v", doc, expected, expected, got, got)
+		}
+	}
+}
+
+// checkGetError checks that tester.Get fails with a PtrError wrapping
+// expectedErr located at expectedPtr, for the same document given in all the
+// forms returned by docForms.
+func (tester *getTester) checkGetError(jsonData string, ptr string, expectedErr error, expectedPtr string) {
+	t := tester.t
+	t.Logf("%v => \"%v\" (error expected)", jsonData, ptr)
+
+	for _, doc := range docForms(t, jsonData, ptr) {
 		got, err := tester.Get(doc, ptr)
 		if err == nil {
 			t.Errorf("  %T: unexpected success: got %T %v", doc, got, got)
@@ -159,6 +162,69 @@ func (tester *getTester) runTest() {
 	tester.checkGetError(`[1,2]`, `/-`, jsonptr.ErrIndex, `/-`)
 	tester.checkGetError(`{"a":[[1],[2]]}`, `/a/1/1`, jsonptr.ErrIndex, `/a/1/1`)
 	tester.checkGetError(`{"a":[[1],[2]]}`, `/a/2/0`, jsonptr.ErrIndex, `/a/2`)
+
+	// Partially deserialized containers mixed at various levels
+	mixed := map[string]interface{}{
+		"a": []json.RawMessage{
+			json.RawMessage(`{"b":[1,2]}`),
+			json.RawMessage(`"x"`),
+		},
+		"c": map[string]json.RawMessage{
+			"d": json.RawMessage(`[true]`),
+			"~": json.RawMessage(`null`),
+		},
+		"e": []interface{}{
+			map[string]json.RawMessage{"f": json.RawMessage(`{"g":3}`)},
+		},
+	}
+	for _, test := range []struct {
+		ptr      string
+		expected interface{}
+	}{
+		{`/a/0/b/1`, float64(2)},
+		{`/a/1`, "x"},
+		{`/c/d/0`, true},
+		{`/c/~0`, nil},
+		{`/e/0/f/g`, float64(3)},
+		{`/e/0/f`, map[string]interface{}{"g": float64(3)}},
+		// Partially deserialized containers are returned as-is when they are the leaf
+		{`/a`, mixed["a"]},
+		{`/c`, mixed["c"]},
+		{`/e/0`, mixed["e"].([]interface{})[0]},
+	} {
+		t.Logf("mixed => %q", test.ptr)
+		got, err := tester.Get(mixed, test.ptr)
+		if err != nil {
+			t.Errorf("  unexpected error: %s", err)
+			continue
+		}
+		if !reflect.DeepEqual(got, test.expected) {
+			t.Errorf("  expected: %T %v\n       got: %T %v", test.expected, test.expected, got, got)
+		}
+	}
+	for _, test := range []struct {
+		ptr string
+		err error
+		loc string
+	}{
+		{`/a/2`, jsonptr.ErrIndex, `/a/2`},
+		{`/a/-`, jsonptr.ErrIndex, `/a/-`},
+		{`/a/0/x`, jsonptr.ErrProperty, `/a/0/x`},
+		{`/c/x`, jsonptr.ErrProperty, `/c/x`},
+		{`/c/d/1`, jsonptr.ErrIndex, `/c/d/1`},
+		{`/e/0/x`, jsonptr.ErrProperty, `/e/0/x`},
+	} {
+		t.Logf("mixed => %q (error expected)", test.ptr)
+		_, err := tester.Get(mixed, test.ptr)
+		var perr *jsonptr.PtrError
+		if !errors.As(err, &perr) || !errors.Is(err, test.err) {
+			t.Errorf("  got %T %v, want *PtrError %v", err, err, test.err)
+			continue
+		}
+		if perr.Ptr != test.loc {
+			t.Errorf("  error located at %q, want %q", perr.Ptr, test.loc)
+		}
+	}
 }
 
 func TestGet(t *testing.T) {

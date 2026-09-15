@@ -202,6 +202,9 @@ func getLeaf(doc interface{}) (interface{}, ptrError) {
 //   - a deserialized document made of []interface{}, map[string]interface{} or any terminal value
 //   - a [encoding/json.RawMessage]
 //   - a JSONDecoder (such as *[encoding/json.Decoder]) for streamed decoding
+//   - a partially deserialized document: []json.RawMessage, map[string]json.RawMessage
+//
+// Those containers may be mixed at any level of the tree.
 //
 // In case of error a PtrError is returned.
 func Get(doc interface{}, ptr string) (interface{}, error) {
@@ -231,6 +234,24 @@ func Get(doc interface{}, ptr string) (interface{}, error) {
 				return nil, propertyError(ptr[:p])
 			}
 		case []interface{}:
+			n, err := arrayIndex(cur[:q])
+			if err != nil {
+				return nil, &BadPointerError{ptr[:p], err}
+			}
+			if n < 0 || n >= len(here) {
+				return nil, indexError(ptr[:p])
+			}
+			doc = here[n]
+		case map[string]json.RawMessage:
+			key, err := UnescapeString(cur[:q])
+			if err != nil {
+				return nil, &BadPointerError{ptr[:p], err}
+			}
+			var ok bool
+			if doc, ok = here[key]; !ok {
+				return nil, propertyError(ptr[:p])
+			}
+		case []json.RawMessage:
 			n, err := arrayIndex(cur[:q])
 			if err != nil {
 				return nil, &BadPointerError{ptr[:p], err}
