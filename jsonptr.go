@@ -295,6 +295,11 @@ func Get(doc interface{}, ptr string) (interface{}, error) {
 // Once done, the value at ptr (if any) is attached to the tree at *pdoc and
 // can be modified in place.
 //
+// A map[string]json.RawMessage or []json.RawMessage traversed on the way is
+// converted to map[string]interface{} or []interface{} (only the traversed
+// element is decoded, the others are kept raw), as the decoded element must be
+// stored in it. One at the end of the path is left untouched.
+//
 // Only JSON decoding errors are reported: navigation errors are left for Get
 // to report.
 func materialize(pdoc *interface{}, ptr string, p int) error {
@@ -344,14 +349,63 @@ func materialize(pdoc *interface{}, ptr string, p int) error {
 			return nil
 		}
 		return materialize(&here[n], ptr, p)
+	case map[string]json.RawMessage:
+		key, err := UnescapeString(token)
+		if err != nil {
+			return nil
+		}
+		raw, ok := here[key]
+		if !ok {
+			return nil
+		}
+		m := make(map[string]interface{}, len(here))
+		for k, v := range here {
+			m[k] = v
+		}
+		*pdoc = m
+		var v interface{} = raw
+		err = materialize(&v, ptr, p)
+		m[key] = v
+		return err
+	case []json.RawMessage:
+		n, err := arrayIndex(token)
+		if err != nil || n < 0 || n >= len(here) {
+			return nil
+		}
+		s := make([]interface{}, len(here))
+		for i, v := range here {
+			s[i] = v
+		}
+		*pdoc = s
+		return materialize(&s[n], ptr, p)
 	}
 	return nil
+}
+
+// rawValue returns value as a [encoding/json.RawMessage] for storing it into
+// a map[string]json.RawMessage or a []json.RawMessage: value itself if it is
+// already one, the next value of a JSONDecoder, or the JSON encoding of any
+// other value.
+func rawValue(value interface{}) (json.RawMessage, error) {
+	switch v := value.(type) {
+	case json.RawMessage:
+		return v, nil
+	case JSONDecoder:
+		var raw json.RawMessage
+		err := v.Decode(&raw)
+		return raw, err
+	}
+	return json.Marshal(value)
 }
 
 // Set modifies a JSON-like data tree.
 //
 // Any [encoding/json.RawMessage] or JSONDecoder on the path to the value
 // is replaced in the tree by its decoded value.
+//
+// If the container of the value is a map[string]json.RawMessage or a
+// []json.RawMessage, value is stored as a json.RawMessage: as-is if it is
+// already one, else its JSON encoding.
 //
 // In case of error a PtrError is returned.
 func Set(doc *interface{}, ptr string, value interface{}) error {
@@ -401,14 +455,45 @@ func Set(doc *interface{}, ptr string, value interface{}) error {
 		//	return &PtrError{ptr, ErrIndex}
 		//}
 
-		// TODO make+copy
-		for i := n - len(parent); i > 0; i-- {
-			parent = append(parent, nil)
-		}
-		parent = append(parent, value)
+		// Pad with nulls up to n
+		parent = append(parent, make([]interface{}, n-len(parent)+1)...)
+		parent[n] = value
 		// We appended beyond original len, so the slice changed so we have to
 		// store the new one at the old place
 		// No error can happen as we already parsed the pointer
+		_ = Set(doc, parentPtr, parent)
+	case map[string]json.RawMessage:
+		key, err := UnescapeString(prop)
+		if err != nil {
+			return &BadPointerError{ptr, err}
+		}
+		raw, err := rawValue(value)
+		if err != nil {
+			return &DocumentError{ptr, err}
+		}
+		if parent != nil {
+			parent[key] = raw
+		} else {
+			return Set(doc, parentPtr, map[string]json.RawMessage{key: raw})
+		}
+	case []json.RawMessage:
+		n, err := arrayIndex(prop)
+		if err != nil {
+			return &BadPointerError{ptr, err}
+		}
+		raw, err := rawValue(value)
+		if err != nil {
+			return &DocumentError{ptr, err}
+		}
+		if n == -1 {
+			n = len(parent)
+		} else if n < len(parent) {
+			parent[n] = raw
+			return nil
+		}
+		// Pad with nulls up to n (a nil json.RawMessage is encoded as null)
+		parent = append(parent, make([]json.RawMessage, n-len(parent)+1)...)
+		parent[n] = raw
 		_ = Set(doc, parentPtr, parent)
 	default:
 		return docError(parentPtr, parent)
@@ -468,6 +553,28 @@ func Delete(pdoc *interface{}, ptr string) (interface{}, error) {
 		if n < 0 {
 			return nil, &BadPointerError{ptr, ErrIndex}
 		} else if n >= len(parent) {
+			return nil, &BadPointerError{ptr, ErrIndex}
+		}
+		v := parent[n]
+		copy(parent[n:], parent[n+1:])
+		return v, Set(pdoc, parentPtr, parent[:len(parent)-1])
+	case map[string]json.RawMessage:
+		key, err := UnescapeString(prop)
+		if err != nil {
+			return nil, &BadPointerError{ptr, err}
+		}
+		v, found := parent[key]
+		if !found {
+			return nil, propertyError(ptr)
+		}
+		delete(parent, key)
+		return v, nil
+	case []json.RawMessage:
+		n, err := arrayIndex(prop)
+		if err != nil {
+			return nil, &BadPointerError{ptr, err}
+		}
+		if n < 0 || n >= len(parent) {
 			return nil, &BadPointerError{ptr, ErrIndex}
 		}
 		v := parent[n]
