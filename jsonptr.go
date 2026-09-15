@@ -268,7 +268,69 @@ func Get(doc interface{}, ptr string) (interface{}, error) {
 	return doc, err
 }
 
+// materialize walks *pdoc along ptr[p:] (ptr[:p] is the already walked part)
+// and replaces in place any [encoding/json.RawMessage] or JSONDecoder found on
+// the way (including at the end of the path) by its decoded value.
+// Once done, the value at ptr (if any) is attached to the tree at *pdoc and
+// can be modified in place.
+//
+// Only JSON decoding errors are reported: navigation errors are left for Get
+// to report.
+func materialize(pdoc *interface{}, ptr string, p int) error {
+	switch raw := (*pdoc).(type) {
+	case json.RawMessage:
+		var v interface{}
+		if err := json.Unmarshal(raw, &v); err != nil {
+			return jsonError(ptr[:p], err)
+		}
+		*pdoc = v
+	case JSONDecoder:
+		var v interface{}
+		if err := raw.Decode(&v); err != nil {
+			return jsonError(ptr[:p], err)
+		}
+		*pdoc = v
+	}
+
+	if p >= len(ptr) {
+		return nil
+	}
+	// ptr[p] == '/'
+	p++
+	q := strings.IndexByte(ptr[p:], '/')
+	if q == -1 {
+		q = len(ptr) - p
+	}
+	token := ptr[p : p+q]
+	p += q
+
+	switch here := (*pdoc).(type) {
+	case map[string]interface{}:
+		key, err := UnescapeString(token)
+		if err != nil {
+			return nil
+		}
+		v, ok := here[key]
+		if !ok {
+			return nil
+		}
+		err = materialize(&v, ptr, p)
+		here[key] = v
+		return err
+	case []interface{}:
+		n, err := arrayIndex(token)
+		if err != nil || n < 0 || n >= len(here) {
+			return nil
+		}
+		return materialize(&here[n], ptr, p)
+	}
+	return nil
+}
+
 // Set modifies a JSON-like data tree.
+//
+// Any [encoding/json.RawMessage] or JSONDecoder on the path to the value
+// is replaced in the tree by its decoded value.
 //
 // In case of error a PtrError is returned.
 func Set(doc *interface{}, ptr string, value interface{}) error {
@@ -283,12 +345,12 @@ func Set(doc *interface{}, ptr string, value interface{}) error {
 	prop := ptr[p+1:]
 	parentPtr := ptr[:p]
 
+	if err := materialize(doc, parentPtr, 0); err != nil {
+		return err
+	}
 	parent, err := Get(*doc, parentPtr)
 	if err != nil {
 		return err
-	}
-	if len(parentPtr) == 0 {
-		*doc = parent
 	}
 
 	switch parent := (parent).(type) {
@@ -336,6 +398,9 @@ func Set(doc *interface{}, ptr string, value interface{}) error {
 
 // Delete removes an object property or an array element (and shifts remaining ones).
 // It can't be applied on root.
+//
+// Any [encoding/json.RawMessage] or JSONDecoder on the path to the value
+// is replaced in the tree by its decoded value.
 func Delete(pdoc *interface{}, ptr string) (interface{}, error) {
 	if len(ptr) == 0 {
 		return nil, &BadPointerError{ptr, ErrDeleteRoot}
@@ -348,6 +413,9 @@ func Delete(pdoc *interface{}, ptr string) (interface{}, error) {
 	prop := ptr[p+1:]
 	parentPtr := ptr[:p]
 
+	if err := materialize(pdoc, parentPtr, 0); err != nil {
+		return nil, err
+	}
 	parent, err := Get(*pdoc, parentPtr)
 	if err != nil {
 		return nil, err

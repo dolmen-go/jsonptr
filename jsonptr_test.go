@@ -237,4 +237,94 @@ func TestSet(t *testing.T) {
 	checkSet(t, `[0,1]`, `/-`, true, `[0,1,true]`)
 	checkSet(t, `{}`, `/ok`, true, `{"ok":true}`)
 	checkSet(t, `{"x":[]}`, `/x/-`, true, `{"x":[true]}`)
+
+	// json.RawMessage nested in the tree: it must be decoded and stored in
+	// the tree before being modified
+	checkSet(t, map[string]interface{}{"a": json.RawMessage(`{}`)}, `/a/b`, 1, `{"a":{"b":1}}`)
+	checkSet(t, map[string]interface{}{"a": json.RawMessage(`{"x":{"y":[]}}`)}, `/a/x/y/-`, true, `{"a":{"x":{"y":[true]}}}`)
+	checkSet(t, map[string]interface{}{"a": json.RawMessage(`[]`)}, `/a/-`, true, `{"a":[true]}`)
+	checkSet(t, []interface{}{json.RawMessage(`[1]`)}, `/0/-`, 2, `[[1,2]]`)
+	checkSet(t, []interface{}{json.RawMessage(`[1]`)}, `/0/0`, 2, `[[2]]`)
+	checkSet(t, map[string]interface{}{"a": json.RawMessage(`{"b":{"c":1}}`)}, `/a/b/c`, 2, `{"a":{"b":{"c":2}}}`)
+	// Replacing the RawMessage itself
+	checkSet(t, map[string]interface{}{"a": json.RawMessage(`{}`)}, `/a`, 1, `{"a":1}`)
+	// Nested streamed decoder
+	checkSet(t, map[string]interface{}{"a": json.NewDecoder(strings.NewReader(`{"x":[1]}`))}, `/a/x/-`, 2, `{"a":{"x":[1,2]}}`)
+	// Nested in a RawMessage root
+	checkSet(t, `{"a":{"b":[]}}`, `/a/b/0`, true, `{"a":{"b":[true]}}`)
+
+	// Invalid JSON in a nested RawMessage
+	doc := interface{}(map[string]interface{}{"a": json.RawMessage(`{`)})
+	err := jsonptr.Set(&doc, `/a/b`, 1)
+	var docErr *jsonptr.DocumentError
+	if !errors.As(err, &docErr) {
+		t.Errorf("invalid nested JSON: got %T %v, want *DocumentError", err, err)
+	}
+}
+
+func checkDelete(t *testing.T, data interface{}, ptr string, expectedValue interface{}, jsonOut string) {
+	t.Logf("%#v - \"%v\"", data, ptr)
+	got, err := jsonptr.Delete(&data, ptr)
+	if err != nil {
+		t.Errorf("  unexpected error: %s", err)
+		return
+	}
+	if !reflect.DeepEqual(got, expectedValue) {
+		t.Errorf("  deleted value: got %T %v, want %T %v", got, got, expectedValue, expectedValue)
+	}
+	out, err := json.Marshal(data)
+	if err != nil {
+		t.Errorf("  can't marshal output: %s", err)
+		return
+	}
+	if string(out) != jsonOut {
+		t.Errorf("  got %s, want %s", out, jsonOut)
+	}
+}
+
+func TestDelete(t *testing.T) {
+	checkDelete(t, map[string]interface{}{"a": 1, "b": 2}, `/a`, 1, `{"b":2}`)
+	checkDelete(t, []interface{}{1, 2, 3}, `/1`, 2, `[1,3]`)
+	checkDelete(t, []interface{}{1, 2, 3}, `/2`, 3, `[1,2]`)
+	checkDelete(t, []interface{}{1}, `/0`, 1, `[]`)
+	checkDelete(t, map[string]interface{}{"a": []interface{}{1, 2}}, `/a/0`, 1, `{"a":[2]}`)
+
+	// json.RawMessage in the tree, at root or nested
+	checkDelete(t, json.RawMessage(`{"a":1,"b":2}`), `/a`, float64(1), `{"b":2}`)
+	checkDelete(t, json.RawMessage(`[1,2,3]`), `/1`, float64(2), `[1,3]`)
+	checkDelete(t, map[string]interface{}{"a": json.RawMessage(`{"b":1,"c":2}`)}, `/a/b`, float64(1), `{"a":{"c":2}}`)
+	checkDelete(t, map[string]interface{}{"a": json.RawMessage(`[1,2,3]`)}, `/a/1`, float64(2), `{"a":[1,3]}`)
+	checkDelete(t, map[string]interface{}{"a": json.RawMessage(`{"b":{"c":[true]}}`)}, `/a/b/c/0`, true, `{"a":{"b":{"c":[]}}}`)
+	checkDelete(t, map[string]interface{}{"a": json.NewDecoder(strings.NewReader(`{"b":1,"c":2}`))}, `/a/b`, float64(1), `{"a":{"c":2}}`)
+
+	// Errors
+	for _, test := range []struct {
+		doc interface{}
+		ptr string
+		err error
+	}{
+		{map[string]interface{}{}, ``, jsonptr.ErrDeleteRoot},
+		{map[string]interface{}{}, `a`, jsonptr.ErrSyntax},
+		{map[string]interface{}{}, `/a`, jsonptr.ErrProperty},
+		{map[string]interface{}{"a": 1}, `/a/b`, nil}, // DocumentError
+		{[]interface{}{1}, `/1`, jsonptr.ErrIndex},
+		{[]interface{}{1}, `/-`, jsonptr.ErrIndex},
+		{[]interface{}{1}, `/x`, jsonptr.ErrSyntax},
+		{map[string]interface{}{"a": json.RawMessage(`{`)}, `/a/b`, nil}, // DocumentError
+	} {
+		doc := test.doc
+		_, err := jsonptr.Delete(&doc, test.ptr)
+		if err == nil {
+			t.Errorf("%#v - %q: expected error", test.doc, test.ptr)
+			continue
+		}
+		if test.err == nil {
+			var docErr *jsonptr.DocumentError
+			if !errors.As(err, &docErr) {
+				t.Errorf("%#v - %q: got %T %v, want *DocumentError", test.doc, test.ptr, err, err)
+			}
+		} else if !errors.Is(err, test.err) {
+			t.Errorf("%#v - %q: got %T %v, want %v", test.doc, test.ptr, err, err, test.err)
+		}
+	}
 }
