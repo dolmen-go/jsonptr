@@ -5,6 +5,8 @@
 package jsonptr_test
 
 import (
+	"encoding/json"
+	"errors"
 	"fmt"
 	"reflect"
 	"strings"
@@ -360,6 +362,39 @@ func TestPointerClone(t *testing.T) {
 	orig.Up().Property("bar")
 	if clone.String() != "/foo" {
 		t.Errorf("Failure!")
+	}
+}
+
+// TestPointerInDocumentError checks the location reported by Pointer.In
+// when the pointer goes through a value which is not an object or an array.
+func TestPointerInDocumentError(t *testing.T) {
+	for _, test := range []struct {
+		ptr jsonptr.Pointer
+		doc interface{}
+		loc string // Expected DocumentError.Ptr
+	}{
+		{jsonptr.Pointer{"a"}, 42, ""},
+		{jsonptr.Pointer{"a"}, nil, ""},
+		{jsonptr.Pointer{"a"}, "x", ""},
+		{jsonptr.Pointer{"a", "b"}, map[string]interface{}{"a": 1}, "/a"},
+		{jsonptr.Pointer{"0", "b"}, []interface{}{true}, "/0"},
+		{jsonptr.Pointer{"a", "b", "c"}, map[string]interface{}{"a": map[string]interface{}{"b": nil}}, "/a/b"},
+		// Same, through the streamed decoder
+		{jsonptr.Pointer{"a"}, json.RawMessage(`42`), ""},
+		{jsonptr.Pointer{"a", "b"}, json.RawMessage(`{"a":1}`), "/a"},
+		{jsonptr.Pointer{"a", "b"}, map[string]interface{}{"a": json.RawMessage(`1`)}, "/a"},
+		{jsonptr.Pointer{"a", "b", "c"}, map[string]interface{}{"a": json.RawMessage(`{"b":1}`)}, "/a/b"},
+	} {
+		t.Logf("%q in %#v", test.ptr, test.doc)
+		_, err := test.ptr.In(test.doc)
+		var docErr *jsonptr.DocumentError
+		if !errors.As(err, &docErr) {
+			t.Errorf("got %T %v, want *DocumentError", err, err)
+			continue
+		}
+		if docErr.Ptr != test.loc {
+			t.Errorf("got error at %q, want %q", docErr.Ptr, test.loc)
+		}
 	}
 }
 

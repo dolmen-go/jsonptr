@@ -190,8 +190,9 @@ func (ptr Pointer) In(doc interface{}) (interface{}, error) {
 			}
 			return v, err
 		default:
-			// We report the error at the upper level
-			return nil, docError(ptr[:i-1].String(), doc)
+			// We report the error at the upper level: the location of the
+			// value that can't be traversed
+			return nil, docError(ptr[:i].String(), doc)
 		}
 	}
 
