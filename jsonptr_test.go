@@ -6,6 +6,7 @@ package jsonptr_test
 
 import (
 	"encoding/json"
+	"errors"
 	"reflect"
 	"strings"
 	"testing"
@@ -62,6 +63,42 @@ func (tester *getTester) checkGet(jsonData string, ptr string, expected interfac
 	}
 }
 
+// checkGetError checks that tester.Get fails with a PtrError wrapping
+// expectedErr located at expectedPtr, for the same document given as a
+// deserialized structure, as a json.RawMessage and as a *json.Decoder.
+func (tester *getTester) checkGetError(jsonData string, ptr string, expectedErr error, expectedPtr string) {
+	t := tester.t
+	t.Logf("%v => \"%v\" (error expected)", jsonData, ptr)
+	var data interface{}
+	if err := json.Unmarshal([]byte(jsonData), &data); err != nil {
+		t.Fatalf("Can't unmarshal %v: %s\n", jsonData, err)
+	}
+
+	for _, doc := range []interface{}{
+		data,
+		json.RawMessage(jsonData),
+		json.NewDecoder(strings.NewReader(jsonData)),
+	} {
+		got, err := tester.Get(doc, ptr)
+		if err == nil {
+			t.Errorf("  %T: unexpected success: got %T %v", doc, got, got)
+			continue
+		}
+		if !errors.Is(err, expectedErr) {
+			t.Errorf("  %T: got %T %q, want %q", doc, err, err, expectedErr)
+			continue
+		}
+		var perr *jsonptr.PtrError
+		if !errors.As(err, &perr) {
+			t.Errorf("  %T: got %T %q, want *PtrError", doc, err, err)
+			continue
+		}
+		if perr.Ptr != expectedPtr {
+			t.Errorf("  %T: error located at %q, want %q", doc, perr.Ptr, expectedPtr)
+		}
+	}
+}
+
 func (tester *getTester) runTest() {
 	t := tester.t
 	for _, doc := range []interface{}{
@@ -107,6 +144,21 @@ func (tester *getTester) runTest() {
 	tester.checkGet(`{"a":[1,2]}`, `/a/1`, float64(2))
 	tester.checkGet(`{"b":null,"a":[1,2]}`, `/a/1`, float64(2))
 	tester.checkGet(`{"a":[0,1,2,3,4,5,6,7,8,9,"x"]}`, `/a/10`, "x")
+
+	// Property not found
+	tester.checkGetError(`{}`, `/a`, jsonptr.ErrProperty, `/a`)
+	tester.checkGetError(`{"b":1}`, `/a`, jsonptr.ErrProperty, `/a`)
+	tester.checkGetError(`{"b":{"a":1},"c":[1,2],"d":null}`, `/a`, jsonptr.ErrProperty, `/a`)
+	tester.checkGetError(`{"a":{"b":1}}`, `/a/c`, jsonptr.ErrProperty, `/a/c`)
+	tester.checkGetError(`{"a":{"b":1}}`, `/b/a`, jsonptr.ErrProperty, `/b`)
+	tester.checkGetError(`{"a":[{"b":1}]}`, `/a/0/c`, jsonptr.ErrProperty, `/a/0/c`)
+	tester.checkGetError(`{"~":1}`, `/~1`, jsonptr.ErrProperty, `/~1`)
+	// Index out of range
+	tester.checkGetError(`[]`, `/0`, jsonptr.ErrIndex, `/0`)
+	tester.checkGetError(`[1,2]`, `/2`, jsonptr.ErrIndex, `/2`)
+	tester.checkGetError(`[1,2]`, `/-`, jsonptr.ErrIndex, `/-`)
+	tester.checkGetError(`{"a":[[1],[2]]}`, `/a/1/1`, jsonptr.ErrIndex, `/a/1/1`)
+	tester.checkGetError(`{"a":[[1],[2]]}`, `/a/2/0`, jsonptr.ErrIndex, `/a/2`)
 }
 
 func TestGet(t *testing.T) {

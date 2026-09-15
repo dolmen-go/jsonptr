@@ -92,7 +92,8 @@ func getJSON(decoder JSONDecoder, ptr string) (interface{}, ptrError) {
 				return nil, &BadPointerError{ptr[:p], err}
 			}
 			found := false
-			for {
+			// More() is false once the closing '}' is reached
+			for decoder.More() {
 				tok, err := decoder.Token()
 				if err != nil {
 					return nil, jsonError(ptr[:p], err)
