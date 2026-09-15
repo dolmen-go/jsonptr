@@ -5,7 +5,6 @@
 package jsonptr
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"strconv"
@@ -51,35 +50,14 @@ func MustParse(pointer string) Pointer {
 	return ptr
 }
 
-// MarshalText implements [encoding.TextUnmarshaler].
+// UnmarshalText implements [encoding.TextUnmarshaler].
 func (ptr *Pointer) UnmarshalText(text []byte) error {
-	if len(text) == 0 {
-		*ptr = nil
-		return nil
-	}
-	if text[0] != '/' {
-		return ErrSyntax
-	}
-
-	var p Pointer
-	t := text[1:]
-	for {
-		i := bytes.IndexByte(t, '/')
-		if i < 0 {
-			break
-		}
-		part, err := Unescape(t[:i])
-		if err != nil {
-			return syntaxError(string(text[:len(text)-len(t)-i-1]))
-		}
-		p = append(p, string(part))
-		t = t[i+1:]
-	}
-	part, err := Unescape(t)
+	// Parse works on a copy, so the caller's buffer is never aliased nor modified.
+	p, err := Parse(string(text))
 	if err != nil {
-		return syntaxError(string(text))
+		return err
 	}
-	*ptr = append(p, string(part))
+	*ptr = p
 	return nil
 }
 

@@ -32,6 +32,8 @@ var parseTests = [...]struct {
 	{"/a~x", nil, &jsonptr.BadPointerError{"/a~x", jsonptr.ErrSyntax}},
 	{"/abc/~", nil, &jsonptr.BadPointerError{"/abc/~", jsonptr.ErrSyntax}},
 	{"/abc/~/b", nil, &jsonptr.BadPointerError{"/abc/~", jsonptr.ErrSyntax}},
+	{"/~2/x", nil, &jsonptr.BadPointerError{"/~2", jsonptr.ErrSyntax}},
+	{"/a/b~2/x", nil, &jsonptr.BadPointerError{"/a/b~2", jsonptr.ErrSyntax}},
 	{"/abc/~x", nil, &jsonptr.BadPointerError{"/abc/~x", jsonptr.ErrSyntax}},
 	{"/abc/a~", nil, &jsonptr.BadPointerError{"/abc/a~", jsonptr.ErrSyntax}},
 	{"/~0", jsonptr.Pointer{"~"}, nil},
@@ -98,13 +100,38 @@ func TestPointerParse(t *testing.T) {
 					t.Errorf("roundtrip failure: got %q != %q", ptr, test.in)
 				}
 			} else if !reflect.DeepEqual(err, test.err) {
-				// TODO fix jsonptr.Parse to match UnmarshalText
-				t.Logf("error mismatch: want %T %q, got %T %q",
+				t.Errorf("error mismatch: want %T %q, got %T %q",
 					test.err, test.err,
 					err, err,
 				)
 			}
 		}
+	}
+}
+
+// TestPointerUnmarshalTextInput checks that UnmarshalText neither modifies
+// nor retains the text it is given.
+func TestPointerUnmarshalTextInput(t *testing.T) {
+	const in = "/a~1b/c~0d"
+	text := []byte(in)
+	var p jsonptr.Pointer
+	if err := p.UnmarshalText(text); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if string(text) != in {
+		t.Errorf("input modified: got %q, want %q", text, in)
+	}
+	if !reflect.DeepEqual(p, jsonptr.Pointer{"a/b", "c~d"}) {
+		t.Errorf("got %#v", p)
+	}
+	// Clobber the input: the parsed pointer must not change
+	copy(text, "/xxxxxxxxx")
+	if !reflect.DeepEqual(p, jsonptr.Pointer{"a/b", "c~d"}) {
+		t.Errorf("pointer aliases the input: got %#v", p)
+	}
+
+	if err := p.UnmarshalText(nil); err != nil || p != nil {
+		t.Errorf("empty text: got %#v, %v", p, err)
 	}
 }
 
