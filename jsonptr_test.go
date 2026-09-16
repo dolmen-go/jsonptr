@@ -475,6 +475,46 @@ func TestSet(t *testing.T) {
 	} else if !reflect.DeepEqual(doc, json.RawMessage(` 1`)) {
 		t.Errorf("raw scalar: got %#v", doc)
 	}
+	// On error, a JSONDecoder on the path that has been read is replaced in
+	// the tree by the raw value read, so the document stays usable
+	for _, test := range []struct {
+		doc      interface{}
+		ptr      string
+		expected interface{} // document after the failed Set
+		get      string      // a pointer through the decoder, that must still resolve
+	}{
+		{
+			map[string]interface{}{"a": json.NewDecoder(strings.NewReader(`{"b":1} "next"`))}, `/a/x/y`,
+			map[string]interface{}{"a": json.RawMessage(`{"b":1}`)}, `/a/b`,
+		},
+		{
+			[]interface{}{json.NewDecoder(strings.NewReader(`[1] "next"`))}, `/0/5/y`,
+			[]interface{}{json.RawMessage(`[1]`)}, `/0/0`,
+		},
+		// Failure below the decoder, in a lazily decoded layer
+		{
+			map[string]interface{}{"a": json.NewDecoder(strings.NewReader(`{"b":{"c":1},"d":2}`))}, `/a/b/c/x`,
+			map[string]interface{}{"a": json.RawMessage(`{"b":{"c":1},"d":2}`)}, `/a/b/c`,
+		},
+		// Decoder at the root
+		{
+			json.NewDecoder(strings.NewReader(`{"b":1}`)), `/x/y`,
+			json.RawMessage(`{"b":1}`), `/b`,
+		},
+	} {
+		t.Logf("failed Set through a JSONDecoder: %q", test.ptr)
+		doc := test.doc
+		if err := jsonptr.Set(&doc, test.ptr, 1); err == nil {
+			t.Errorf("  expected error")
+		} else if !reflect.DeepEqual(doc, test.expected) {
+			t.Errorf("  got  %#v\n  want %#v", doc, test.expected)
+		}
+		// The document is still usable
+		if _, err := jsonptr.Get(doc, test.get); err != nil {
+			t.Errorf("  Get %q after failed Set: unexpected error: %v", test.get, err)
+		}
+	}
+
 	// An invalid JSONDecoder value is rejected, the document is left untouched
 	doc = map[string]interface{}{}
 	if err := jsonptr.Set(&doc, `/a`, json.NewDecoder(strings.NewReader(`{`))); !errors.As(err, &docErr) {

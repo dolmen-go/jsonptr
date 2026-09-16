@@ -464,7 +464,8 @@ func rawValue(value interface{}) (json.RawMessage, error) {
 // its members are kept raw.
 //
 // In case of error the document is left unchanged, except that a JSONDecoder
-// on the path (or given as value) may have been read.
+// on the path is replaced by the raw value read from it (a JSONDecoder given
+// as value may also have been read).
 func Set(doc *interface{}, ptr string, value interface{}) error {
 	if dec, isDec := value.(JSONDecoder); isDec {
 		var raw json.RawMessage
@@ -534,6 +535,10 @@ func set(doc *interface{}, ptr string, value interface{}) ptrError {
 			return propertyError(curPtr)
 		}
 		if err := set(&tmp, nextPtr, value); err != nil {
+			if _, isRaw := tmp.(json.RawMessage); isRaw {
+				// A JSONDecoder child has been read: keep its raw bytes in the tree
+				parent[key] = tmp
+			}
 			err.rebase(curPtr)
 			return err
 		}
@@ -582,6 +587,10 @@ func set(doc *interface{}, ptr string, value interface{}) ptrError {
 			return indexError(curPtr)
 		}
 		if err := set(&tmp, nextPtr, value); err != nil {
+			if _, isRaw := tmp.(json.RawMessage); isRaw {
+				// A JSONDecoder child has been read: keep its raw bytes in the tree
+				parent[n] = tmp
+			}
 			err.rebase(curPtr)
 			return err
 		}
