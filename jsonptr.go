@@ -13,6 +13,7 @@ package jsonptr
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"strconv"
 	"strings"
 )
@@ -444,105 +445,174 @@ func rawValue(value interface{}) (json.RawMessage, error) {
 	return json.Marshal(value)
 }
 
-// Set modifies a JSON-like data tree.
+// Set stores value at the location pointed by ptr in the document *doc.
 //
-// Any [encoding/json.RawMessage] or JSONDecoder on the path to the value
-// is replaced in the tree by its decoded value. Decoding is lazy: a raw object
-// or array is decoded as a map[string]json.RawMessage or a []json.RawMessage,
-// so only the containers on the path are decoded and the values outside the
-// path are kept raw.
+// *doc may be any document accepted by [Get]. The root of the document
+// (ptr == "") may be replaced. Otherwise the parent of the location must
+// exist: only the leaf is created if it doesn't exist. In an array, index "-"
+// appends the value, and an index beyond the end extends the array with
+// nulls.
 //
-// If the container of the value is a map[string]json.RawMessage or a
-// []json.RawMessage, value is stored as a json.RawMessage: as-is if it is
-// already one, else its JSON encoding.
+// value is stored as-is, except a JSONDecoder which is drained of its next
+// value into a [encoding/json.RawMessage].
 //
-// In case of error a PtrError is returned.
+// Every container on the path to the value is rewritten in the tree as a
+// map[string]interface{} or a []interface{}. A [encoding/json.RawMessage] or
+// JSONDecoder on the path is decoded lazily, so only the containers on the
+// path are decoded and the values outside the path are kept raw. A
+// map[string]json.RawMessage or a []json.RawMessage on the path is converted,
+// its members are kept raw.
+//
+// In case of error the document is left unchanged, except that a JSONDecoder
+// on the path (or given as value) may have been read.
 func Set(doc *interface{}, ptr string, value interface{}) error {
+	if dec, isDec := value.(JSONDecoder); isDec {
+		var raw json.RawMessage
+		err := dec.Decode(&raw)
+		if err != nil {
+			return fmt.Errorf("invalid value to inject: %w", err)
+		}
+		value = raw
+	}
+
 	if len(ptr) == 0 {
 		*doc = value
 		return nil
 	}
-	p := strings.LastIndexByte(ptr, '/')
-	if p < 0 {
+	if ptr[0] != '/' {
 		return syntaxError(ptr)
 	}
-	prop := ptr[p+1:]
-	parentPtr := ptr[:p]
 
-	parent, err := materialize(doc, parentPtr, 0)
-	if err != nil {
-		return err
+	if raw, ok := (*doc).(JSONDecoder); ok {
+		var r json.RawMessage
+		if err := raw.Decode(&r); err != nil {
+			return jsonError("", err)
+		}
+		*doc = r
 	}
+
+	parent := *doc
+	if raw, ok := parent.(json.RawMessage); ok {
+		var err error
+		parent, err = decodeLayer(raw)
+		if err != nil {
+			return jsonError("", err)
+		}
+	}
+
+	// Split ptr as "/" + prop + nextPtr
+	p := strings.IndexByte(ptr[1:], '/')
+	if p < 0 {
+		p = len(ptr) - 1
+	}
+	prop := ptr[1 : 1+p] // first token, the child of *doc to follow
+	curPtr := ptr[:1+p]  // "/" + prop: location of that child, relative to *doc
+	nextPtr := ptr[1+p:] // rest of the path, relative to the child
 
 	switch parent := (parent).(type) {
 	case map[string]interface{}:
 		key, err := UnescapeString(prop)
 		if err != nil {
-			return &BadPointerError{ptr, err}
+			return &BadPointerError{curPtr, err}
+		}
+		tmp, found := parent[key]
+		if !found && nextPtr != "" {
+			// Only the leaf may be created
+			return propertyError(curPtr)
+		}
+		if err := Set(&tmp, nextPtr, value); err != nil {
+			err.(ptrError).rebase(curPtr)
+			return err
 		}
 		if parent != nil {
-			parent[key] = value
+			parent[key] = tmp
+			*doc = parent // for the case where parent was deserialized
 		} else {
-			return Set(doc, parentPtr, map[string]interface{}{key: value})
+			*doc = map[string]interface{}{key: tmp}
+		}
+	case map[string]json.RawMessage:
+		key, err := UnescapeString(prop)
+		if err != nil {
+			return &BadPointerError{curPtr, err}
+		}
+		var tmp interface{}
+		if v, found := parent[key]; found {
+			tmp = v
+		} else if nextPtr != "" {
+			// Only the leaf may be created
+			return propertyError(curPtr)
+		}
+		if err := Set(&tmp, nextPtr, value); err != nil {
+			err.(ptrError).rebase(curPtr)
+			return err
+		}
+		if parent != nil {
+			m := make(map[string]interface{}, len(parent))
+			for k, v := range parent {
+				m[k] = v
+			}
+			m[key] = tmp
+			*doc = m
+		} else {
+			*doc = map[string]interface{}{key: tmp}
 		}
 	case []interface{}:
 		n, err := arrayIndex(prop)
 		if err != nil {
-			return &BadPointerError{ptr, err}
+			return &BadPointerError{curPtr, err}
+		}
+		var tmp interface{}
+		if n >= 0 && n < len(parent) {
+			tmp = parent[n]
+		} else if nextPtr != "" {
+			// Only the leaf may be created
+			return indexError(curPtr)
+		}
+		if err := Set(&tmp, nextPtr, value); err != nil {
+			err.(ptrError).rebase(curPtr)
+			return err
 		}
 		if n == -1 {
 			n = len(parent)
-		} else if n < len(parent) {
-			parent[n] = value
-			return nil
 		}
-
-		// if n > len(parent) {
-		//	return &PtrError{ptr, ErrIndex}
-		//}
-
-		// Pad with nulls up to n
-		parent = append(parent, make([]interface{}, n-len(parent)+1)...)
-		parent[n] = value
-		// We appended beyond original len, so the slice changed so we have to
-		// store the new one at the old place
-		// No error can happen as we already parsed the pointer
-		_ = Set(doc, parentPtr, parent)
-	case map[string]json.RawMessage:
-		key, err := UnescapeString(prop)
-		if err != nil {
-			return &BadPointerError{ptr, err}
+		if n >= len(parent) {
+			// Pad with nulls up to n
+			parent = append(parent, make([]interface{}, n-len(parent)+1)...)
 		}
-		raw, err := rawValue(value)
-		if err != nil {
-			return &DocumentError{ptr, err}
-		}
-		if parent != nil {
-			parent[key] = raw
-		} else {
-			return Set(doc, parentPtr, map[string]json.RawMessage{key: raw})
-		}
+		*doc = parent // We do it in all cases (not just realloc) because parent might have originally been deserialized
+		parent[n] = tmp
 	case []json.RawMessage:
 		n, err := arrayIndex(prop)
 		if err != nil {
-			return &BadPointerError{ptr, err}
+			return &BadPointerError{curPtr, err}
 		}
-		raw, err := rawValue(value)
-		if err != nil {
-			return &DocumentError{ptr, err}
+		var tmp interface{}
+		if n >= 0 && n < len(parent) {
+			tmp = parent[n]
+		} else if nextPtr != "" {
+			// Only the leaf may be created
+			return indexError(curPtr)
+		}
+		if err := Set(&tmp, nextPtr, value); err != nil {
+			err.(ptrError).rebase(curPtr)
+			return err
 		}
 		if n == -1 {
 			n = len(parent)
-		} else if n < len(parent) {
-			parent[n] = raw
-			return nil
 		}
-		// Pad with nulls up to n (a nil json.RawMessage is encoded as null)
-		parent = append(parent, make([]json.RawMessage, n-len(parent)+1)...)
-		parent[n] = raw
-		_ = Set(doc, parentPtr, parent)
+		// Convert to []interface{}, padded with nulls up to n if necessary
+		l := len(parent)
+		if n >= l {
+			l = n + 1
+		}
+		arr := make([]interface{}, l)
+		for i, v := range parent {
+			arr[i] = v
+		}
+		arr[n] = tmp
+		*doc = arr
 	default:
-		return docError(parentPtr, parent)
+		return docError(curPtr, parent)
 	}
 
 	return nil
