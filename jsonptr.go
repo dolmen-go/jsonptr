@@ -263,18 +263,21 @@ func Get(doc interface{}, ptr string) (interface{}, error) {
 			doc = here[n]
 		case JSONDecoder:
 			v, err := getJSON(here, ptr[p-q-1:])
-			if perr, ok := err.(*PtrError); ok {
-				perr.Ptr = ptr[:p-q-1+len(perr.Ptr)]
+			if err != nil {
+				err.rebase(ptr[:p-q-1])
+				return nil, err
 			}
-			return v, err
+			return v, nil
 		case json.RawMessage:
 			v, err := getRaw(here, ptr[p-q-1:])
-			if perr, ok := err.(*PtrError); ok {
-				perr.Ptr = ptr[:p-q-1+len(perr.Ptr)]
+			if err != nil {
+				err.rebase(ptr[:p-q-1])
+				return nil, err
 			}
-			return v, err
+			return v, nil
 		default:
-			return nil, docError(ptr[:p], doc)
+			// Report the location of the value which can't be traversed
+			return nil, docError(ptr[:p-q-1], doc)
 		}
 		if p >= len(ptr) {
 			break

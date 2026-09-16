@@ -74,9 +74,12 @@ func (tester *getTester) checkGet(jsonData string, ptr string, expected interfac
 	}
 }
 
-// checkGetError checks that tester.Get fails with a PtrError wrapping
+// checkGetError checks that tester.Get fails with an error wrapping
 // expectedErr located at expectedPtr, for the same document given in all the
 // forms returned by docForms.
+//
+// The type of the error is expected from expectedErr: a BadPointerError for
+// ErrSyntax, a DocumentError for nil, a PtrError otherwise.
 func (tester *getTester) checkGetError(jsonData string, ptr string, expectedErr error, expectedPtr string) {
 	t := tester.t
 	t.Logf("%v => \"%v\" (error expected)", jsonData, ptr)
@@ -87,17 +90,36 @@ func (tester *getTester) checkGetError(jsonData string, ptr string, expectedErr 
 			t.Errorf("  %T: unexpected success: got %T %v", doc, got, got)
 			continue
 		}
-		if !errors.Is(err, expectedErr) {
+		if expectedErr != nil && !errors.Is(err, expectedErr) {
 			t.Errorf("  %T: got %T %q, want %q", doc, err, err, expectedErr)
 			continue
 		}
-		var perr *jsonptr.PtrError
-		if !errors.As(err, &perr) {
-			t.Errorf("  %T: got %T %q, want *PtrError", doc, err, err)
-			continue
+		var loc string
+		var badErr *jsonptr.BadPointerError
+		var docErr *jsonptr.DocumentError
+		var ptrErr *jsonptr.PtrError
+		switch {
+		case expectedErr == nil:
+			if !errors.As(err, &docErr) {
+				t.Errorf("  %T: got %T %q, want *DocumentError", doc, err, err)
+				continue
+			}
+			loc = docErr.Ptr
+		case expectedErr == jsonptr.ErrSyntax:
+			if !errors.As(err, &badErr) {
+				t.Errorf("  %T: got %T %q, want *BadPointerError", doc, err, err)
+				continue
+			}
+			loc = badErr.BadPtr
+		default:
+			if !errors.As(err, &ptrErr) {
+				t.Errorf("  %T: got %T %q, want *PtrError", doc, err, err)
+				continue
+			}
+			loc = ptrErr.Ptr
 		}
-		if perr.Ptr != expectedPtr {
-			t.Errorf("  %T: error located at %q, want %q", doc, perr.Ptr, expectedPtr)
+		if loc != expectedPtr {
+			t.Errorf("  %T: error located at %q, want %q", doc, loc, expectedPtr)
 		}
 	}
 }
@@ -162,6 +184,21 @@ func (tester *getTester) runTest() {
 	tester.checkGetError(`[1,2]`, `/-`, jsonptr.ErrIndex, `/-`)
 	tester.checkGetError(`{"a":[[1],[2]]}`, `/a/1/1`, jsonptr.ErrIndex, `/a/1/1`)
 	tester.checkGetError(`{"a":[[1],[2]]}`, `/a/2/0`, jsonptr.ErrIndex, `/a/2`)
+	// Invalid escape: the error is located at the bad token
+	tester.checkGetError(`{"a":{"b":1}}`, `/a/~2`, jsonptr.ErrSyntax, `/a/~2`)
+	tester.checkGetError(`{"a":{"b":1}}`, `/a/~2/x`, jsonptr.ErrSyntax, `/a/~2`)
+	tester.checkGetError(`{"a":{"b":{"c":1}}}`, `/a/b/~/x`, jsonptr.ErrSyntax, `/a/b/~`)
+	// Not an object or array: the error is located at the value which can't
+	// be traversed
+	tester.checkGetError(`1`, `/x`, nil, ``)
+	tester.checkGetError(`"str"`, `/0/x`, nil, ``)
+	tester.checkGetError(`{"s":1}`, `/s/x`, nil, `/s`)
+	tester.checkGetError(`{"a":{"s":1}}`, `/a/s/x`, nil, `/a/s`)
+	tester.checkGetError(`{"a":{"s":1}}`, `/a/s/x/y`, nil, `/a/s`)
+	tester.checkGetError(`{"a":null}`, `/a/x`, nil, `/a`)
+	tester.checkGetError(`{"a":[1]}`, `/a/0/x`, nil, `/a/0`)
+	tester.checkGetError(`[{"s":"str"}]`, `/0/s/0`, nil, `/0/s`)
+	tester.checkGetError(`{"a":[{"s":true}]}`, `/a/0/s/0`, nil, `/a/0/s`)
 
 	// Partially deserialized containers mixed at various levels
 	mixed := map[string]interface{}{
