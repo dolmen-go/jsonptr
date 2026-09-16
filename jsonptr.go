@@ -322,129 +322,6 @@ func decodeLayer(raw json.RawMessage) (interface{}, error) {
 	return v, nil
 }
 
-// materialize walks *pdoc along ptr[p:] (ptr[:p] is the already walked part)
-// and replaces in place any [encoding/json.RawMessage] or JSONDecoder found on
-// the way (including at the end of the path) by its decoded value.
-// The value at ptr is returned: it is attached to the tree at *pdoc and
-// can be modified in place.
-//
-// Decoding is layered (see decodeLayer): a raw object or array is decoded as a
-// map[string]json.RawMessage or []json.RawMessage, so only the containers on
-// the path are decoded and the values outside the path are kept raw.
-//
-// A map[string]json.RawMessage or []json.RawMessage traversed on the way is
-// converted to map[string]interface{} or []interface{} (only the traversed
-// element is decoded, the others are kept raw), as the decoded element must be
-// stored in it. One at the end of the path is left untouched.
-//
-// Errors are reported like Get does.
-func materialize(pdoc *interface{}, ptr string, p int) (interface{}, error) {
-	switch raw := (*pdoc).(type) {
-	case json.RawMessage:
-		v, err := decodeLayer(raw)
-		if err != nil {
-			return nil, jsonError(ptr[:p], err)
-		}
-		*pdoc = v
-	case JSONDecoder:
-		var r json.RawMessage
-		if err := raw.Decode(&r); err != nil {
-			return nil, jsonError(ptr[:p], err)
-		}
-		v, err := decodeLayer(r)
-		if err != nil {
-			return nil, jsonError(ptr[:p], err)
-		}
-		*pdoc = v
-	}
-
-	if p >= len(ptr) {
-		return *pdoc, nil
-	}
-	// ptr[p] == '/'
-	p++
-	q := strings.IndexByte(ptr[p:], '/')
-	if q == -1 {
-		q = len(ptr) - p
-	}
-	token := ptr[p : p+q]
-	p += q
-
-	switch here := (*pdoc).(type) {
-	case map[string]interface{}:
-		key, err := UnescapeString(token)
-		if err != nil {
-			return nil, &BadPointerError{ptr[:p], err}
-		}
-		child, ok := here[key]
-		if !ok {
-			return nil, propertyError(ptr[:p])
-		}
-		v, err := materialize(&child, ptr, p)
-		here[key] = child
-		return v, err
-	case []interface{}:
-		n, err := arrayIndex(token)
-		if err != nil {
-			return nil, &BadPointerError{ptr[:p], err}
-		}
-		if n < 0 || n >= len(here) {
-			return nil, indexError(ptr[:p])
-		}
-		return materialize(&here[n], ptr, p)
-	case map[string]json.RawMessage:
-		key, err := UnescapeString(token)
-		if err != nil {
-			return nil, &BadPointerError{ptr[:p], err}
-		}
-		raw, ok := here[key]
-		if !ok {
-			return nil, propertyError(ptr[:p])
-		}
-		m := make(map[string]interface{}, len(here))
-		for k, v := range here {
-			m[k] = v
-		}
-		*pdoc = m
-		var child interface{} = raw
-		v, err := materialize(&child, ptr, p)
-		m[key] = child
-		return v, err
-	case []json.RawMessage:
-		n, err := arrayIndex(token)
-		if err != nil {
-			return nil, &BadPointerError{ptr[:p], err}
-		}
-		if n < 0 || n >= len(here) {
-			return nil, indexError(ptr[:p])
-		}
-		s := make([]interface{}, len(here))
-		for i, v := range here {
-			s[i] = v
-		}
-		*pdoc = s
-		return materialize(&s[n], ptr, p)
-	default:
-		return nil, docError(ptr[:p], *pdoc)
-	}
-}
-
-// rawValue returns value as a [encoding/json.RawMessage] for storing it into
-// a map[string]json.RawMessage or a []json.RawMessage: value itself if it is
-// already one, the next value of a JSONDecoder, or the JSON encoding of any
-// other value.
-func rawValue(value interface{}) (json.RawMessage, error) {
-	switch v := value.(type) {
-	case json.RawMessage:
-		return v, nil
-	case JSONDecoder:
-		var raw json.RawMessage
-		err := v.Decode(&raw)
-		return raw, err
-	}
-	return json.Marshal(value)
-}
-
 // Set stores value at the location pointed by ptr in the document *doc.
 //
 // *doc may be any document accepted by [Get]. The root of the document
@@ -640,85 +517,188 @@ func set(doc *interface{}, ptr string, value interface{}) ptrError {
 	return nil
 }
 
-// Delete removes an object property or an array element (and shifts remaining ones).
-// It can't be applied on root.
+// Delete removes the value at the location pointed by ptr in the document
+// *doc, and returns it. An array element is removed by shifting the remaining
+// ones.
 //
-// Any [encoding/json.RawMessage] or JSONDecoder on the path to the value
-// is replaced in the tree by its decoded value, lazily as in [Set].
-// A value deleted from a map[string]json.RawMessage or []json.RawMessage
-// (including one resulting from that lazy decoding) is returned as the
-// json.RawMessage stored in it.
-func Delete(pdoc *interface{}, ptr string) (interface{}, error) {
+// *doc may be any document accepted by [Get]. The root of the document can't
+// be deleted (ErrDeleteRoot). The value must exist (ErrProperty, ErrIndex);
+// index "-" is not accepted.
+//
+// The returned value is the one stored in the tree, so it is a
+// [encoding/json.RawMessage] when the container of the value is a
+// map[string]json.RawMessage or a []json.RawMessage (including when it results
+// from the lazy decoding below).
+//
+// Every container on the path to the value, except the container of the value
+// itself, is rewritten in the tree as a map[string]interface{} or a
+// []interface{}. A [encoding/json.RawMessage] or JSONDecoder on the path is
+// decoded lazily, so only the containers on the path are decoded and the
+// values outside the path are kept raw. A map[string]json.RawMessage or a
+// []json.RawMessage on the path is converted, its members are kept raw.
+//
+// In case of error the document is left unchanged, except that a JSONDecoder
+// on the path is replaced by the raw value read from it.
+func Delete(doc *interface{}, ptr string) (interface{}, error) {
 	if len(ptr) == 0 {
 		return nil, &BadPointerError{ptr, ErrDeleteRoot}
 	}
-
-	p := strings.LastIndexByte(ptr, '/')
-	if p < 0 {
+	if ptr[0] != '/' {
 		return nil, syntaxError(ptr)
 	}
-	prop := ptr[p+1:]
-	parentPtr := ptr[:p]
 
-	parent, err := materialize(pdoc, parentPtr, 0)
+	// Convert a nil ptrError to a nil error
+	v, err := del(doc, ptr)
 	if err != nil {
 		return nil, err
 	}
+	return v, nil
+}
+
+// del is the recursive implementation of [Delete]: it follows the first token
+// of ptr into *doc, then either removes the child (last token) or calls itself
+// on the child with the rest of the path and stores the child back into *doc.
+//
+// ptr is not empty and starts with '/'. Errors are located relatively to
+// *doc: the caller rebases them.
+func del(doc *interface{}, ptr string) (interface{}, ptrError) {
+	if raw, ok := (*doc).(JSONDecoder); ok {
+		var r json.RawMessage
+		if err := raw.Decode(&r); err != nil {
+			return nil, jsonError("", err)
+		}
+		*doc = r
+	}
+
+	parent := *doc
+	if raw, ok := parent.(json.RawMessage); ok {
+		var err error
+		parent, err = decodeLayer(raw)
+		if err != nil {
+			return nil, jsonError("", err)
+		}
+	}
+
+	// Split ptr as "/" + prop + nextPtr
+	p := strings.IndexByte(ptr[1:], '/')
+	if p < 0 {
+		p = len(ptr) - 1
+	}
+	prop := ptr[1 : 1+p] // first token, the child of *doc to follow
+	curPtr := ptr[:1+p]  // "/" + prop: location of that child, relative to *doc
+	nextPtr := ptr[1+p:] // rest of the path, relative to the child
 
 	switch parent := (parent).(type) {
 	case map[string]interface{}:
 		key, err := UnescapeString(prop)
 		if err != nil {
-			return nil, &BadPointerError{ptr, err}
+			return nil, &BadPointerError{curPtr, err}
 		}
-		v, found := parent[key]
+		tmp, found := parent[key]
 		if !found {
-			return nil, propertyError(ptr)
+			return nil, propertyError(curPtr)
 		}
-		delete(parent, key)
+		if nextPtr == "" {
+			delete(parent, key)
+			return tmp, nil
+		}
+		v, perr := del(&tmp, nextPtr)
+		if perr != nil {
+			if _, isRaw := tmp.(json.RawMessage); isRaw {
+				// A JSONDecoder child has been read: keep its raw bytes in the tree
+				parent[key] = tmp
+			}
+			perr.rebase(curPtr)
+			return nil, perr
+		}
+		parent[key] = tmp
+		return v, nil
+	case map[string]json.RawMessage:
+		key, err := UnescapeString(prop)
+		if err != nil {
+			return nil, &BadPointerError{curPtr, err}
+		}
+		raw, found := parent[key]
+		if !found {
+			return nil, propertyError(curPtr)
+		}
+		if nextPtr == "" {
+			delete(parent, key)
+			*doc = parent // for the case where parent was deserialized
+			return raw, nil
+		}
+		var tmp interface{} = raw
+		v, perr := del(&tmp, nextPtr)
+		if perr != nil {
+			perr.rebase(curPtr)
+			return nil, perr
+		}
+		// Convert to map[string]interface{} to store the decoded child
+		m := make(map[string]interface{}, len(parent))
+		for k, v := range parent {
+			m[k] = v
+		}
+		m[key] = tmp
+		*doc = m
 		return v, nil
 	case []interface{}:
 		n, err := arrayIndex(prop)
 		if err != nil {
-			return nil, &BadPointerError{ptr, err}
+			return nil, &BadPointerError{curPtr, err}
 		}
-		/*
-			// FIXME what should be the baviour for '-'?
-			if n == -1 {
-				n = len(parent)-1
+		if n < 0 || n >= len(parent) {
+			return nil, indexError(curPtr)
+		}
+		tmp := parent[n]
+		if nextPtr == "" {
+			last := len(parent) - 1
+			copy(parent[n:], parent[n+1:])
+			parent[last] = nil // release the reference
+			*doc = parent[:last]
+			return tmp, nil
+		}
+		v, perr := del(&tmp, nextPtr)
+		if perr != nil {
+			if _, isRaw := tmp.(json.RawMessage); isRaw {
+				// A JSONDecoder child has been read: keep its raw bytes in the tree
+				parent[n] = tmp
 			}
-		*/
-		if n < 0 {
-			return nil, &BadPointerError{ptr, ErrIndex}
-		} else if n >= len(parent) {
-			return nil, &BadPointerError{ptr, ErrIndex}
+			perr.rebase(curPtr)
+			return nil, perr
 		}
-		v := parent[n]
-		copy(parent[n:], parent[n+1:])
-		return v, Set(pdoc, parentPtr, parent[:len(parent)-1])
-	case map[string]json.RawMessage:
-		key, err := UnescapeString(prop)
-		if err != nil {
-			return nil, &BadPointerError{ptr, err}
-		}
-		v, found := parent[key]
-		if !found {
-			return nil, propertyError(ptr)
-		}
-		delete(parent, key)
+		parent[n] = tmp
 		return v, nil
 	case []json.RawMessage:
 		n, err := arrayIndex(prop)
 		if err != nil {
-			return nil, &BadPointerError{ptr, err}
+			return nil, &BadPointerError{curPtr, err}
 		}
 		if n < 0 || n >= len(parent) {
-			return nil, &BadPointerError{ptr, ErrIndex}
+			return nil, indexError(curPtr)
 		}
-		v := parent[n]
-		copy(parent[n:], parent[n+1:])
-		return v, Set(pdoc, parentPtr, parent[:len(parent)-1])
+		raw := parent[n]
+		if nextPtr == "" {
+			last := len(parent) - 1
+			copy(parent[n:], parent[n+1:])
+			parent[last] = nil // release the reference
+			*doc = parent[:last]
+			return raw, nil
+		}
+		var tmp interface{} = raw
+		v, perr := del(&tmp, nextPtr)
+		if perr != nil {
+			perr.rebase(curPtr)
+			return nil, perr
+		}
+		// Convert to []interface{} to store the decoded child
+		arr := make([]interface{}, len(parent))
+		for i, v := range parent {
+			arr[i] = v
+		}
+		arr[n] = tmp
+		*doc = arr
+		return v, nil
 	default:
-		return nil, docError(parentPtr, parent)
+		return nil, docError(curPtr, parent)
 	}
 }

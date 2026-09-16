@@ -662,29 +662,77 @@ func TestDelete(t *testing.T) {
 		t.Errorf("got %#v", doc)
 	}
 
+	// On error, a JSONDecoder on the path that has been read is replaced in
+	// the tree by the raw value read, so the document stays usable
+	for _, test := range []struct {
+		doc      interface{}
+		ptr      string
+		expected interface{} // document after the failed Delete
+		get      string      // a pointer through the decoder, that must still resolve
+	}{
+		{
+			map[string]interface{}{"a": json.NewDecoder(strings.NewReader(`{"b":1} "next"`))}, `/a/x/y`,
+			map[string]interface{}{"a": json.RawMessage(`{"b":1}`)}, `/a/b`,
+		},
+		{
+			[]interface{}{json.NewDecoder(strings.NewReader(`[1] "next"`))}, `/0/5`,
+			[]interface{}{json.RawMessage(`[1]`)}, `/0/0`,
+		},
+		{
+			map[string]interface{}{"a": json.NewDecoder(strings.NewReader(`{"b":{"c":1},"d":2}`))}, `/a/b/c/x`,
+			map[string]interface{}{"a": json.RawMessage(`{"b":{"c":1},"d":2}`)}, `/a/b/c`,
+		},
+		{
+			json.NewDecoder(strings.NewReader(`{"b":1}`)), `/x`,
+			json.RawMessage(`{"b":1}`), `/b`,
+		},
+	} {
+		t.Logf("failed Delete through a JSONDecoder: %q", test.ptr)
+		doc := test.doc
+		if _, err := jsonptr.Delete(&doc, test.ptr); err == nil {
+			t.Errorf("  expected error")
+		} else if !reflect.DeepEqual(doc, test.expected) {
+			t.Errorf("  got  %#v\n  want %#v", doc, test.expected)
+		}
+		if _, err := jsonptr.Get(doc, test.get); err != nil {
+			t.Errorf("  Get %q after failed Delete: unexpected error: %v", test.get, err)
+		}
+	}
+
 	// Errors
 	for _, test := range []struct {
 		doc interface{}
 		ptr string
 		err error
+		loc string // location reported in the error (not checked if empty)
 	}{
-		{map[string]interface{}{}, ``, jsonptr.ErrDeleteRoot},
-		{map[string]interface{}{}, `a`, jsonptr.ErrSyntax},
-		{map[string]interface{}{}, `/a`, jsonptr.ErrProperty},
-		{map[string]interface{}{"a": 1}, `/a/b`, nil}, // DocumentError
-		{[]interface{}{1}, `/1`, jsonptr.ErrIndex},
-		{[]interface{}{1}, `/-`, jsonptr.ErrIndex},
-		{[]interface{}{1}, `/x`, jsonptr.ErrSyntax},
-		{map[string]interface{}{"a": json.RawMessage(`{`)}, `/a/b`, nil}, // DocumentError
-		{map[string]json.RawMessage{}, `/a`, jsonptr.ErrProperty},
-		{map[string]json.RawMessage{}, `/~2`, jsonptr.ErrSyntax},
-		{map[string]json.RawMessage{}, `/a/b`, jsonptr.ErrProperty},
-		{map[string]json.RawMessage{"a": json.RawMessage(`{`)}, `/a/b`, nil}, // DocumentError
-		{[]json.RawMessage{json.RawMessage(`1`)}, `/1`, jsonptr.ErrIndex},
-		{[]json.RawMessage{json.RawMessage(`1`)}, `/-`, jsonptr.ErrIndex},
-		{[]json.RawMessage{json.RawMessage(`1`)}, `/x`, jsonptr.ErrSyntax},
-		{[]json.RawMessage{json.RawMessage(`1`)}, `/1/x`, jsonptr.ErrIndex},
-		{[]json.RawMessage{json.RawMessage(`1`)}, `/0/x`, nil}, // DocumentError
+		{map[string]interface{}{}, ``, jsonptr.ErrDeleteRoot, ``},
+		{map[string]interface{}{}, `a`, jsonptr.ErrSyntax, `a`},
+		{map[string]interface{}{}, `/a`, jsonptr.ErrProperty, `/a`},
+		{map[string]interface{}{}, `/a/b`, jsonptr.ErrProperty, `/a`},
+		{map[string]interface{}{"a": map[string]interface{}{}}, `/a/b/c`, jsonptr.ErrProperty, `/a/b`},
+		{map[string]interface{}{"a": map[string]interface{}{}}, `/a/~2/c`, jsonptr.ErrSyntax, `/a/~2`},
+		{map[string]interface{}{"a": 1}, `/a/b`, nil, ``}, // DocumentError
+		{[]interface{}{1}, `/1`, jsonptr.ErrIndex, `/1`},
+		{[]interface{}{1}, `/-`, jsonptr.ErrIndex, `/-`},
+		{[]interface{}{1}, `/1/x`, jsonptr.ErrIndex, `/1`},
+		{[]interface{}{1}, `/-/x`, jsonptr.ErrIndex, `/-`},
+		{[]interface{}{1}, `/x`, jsonptr.ErrSyntax, `/x`},
+		{[]interface{}{[]interface{}{}}, `/0/x/y`, jsonptr.ErrSyntax, `/0/x`},
+		{map[string]interface{}{"a": json.RawMessage(`{`)}, `/a/b`, nil, ``}, // DocumentError
+		{json.RawMessage(`{`), `/a`, nil, ``},                                // DocumentError
+		{json.NewDecoder(strings.NewReader(`[x]`)), `/0/a`, nil, ``},         // DocumentError
+		{map[string]json.RawMessage{}, `/a`, jsonptr.ErrProperty, `/a`},
+		{map[string]json.RawMessage{}, `/~2`, jsonptr.ErrSyntax, `/~2`},
+		{map[string]json.RawMessage{}, `/a/b`, jsonptr.ErrProperty, `/a`},
+		{map[string]json.RawMessage{"a": json.RawMessage(`{}`)}, `/a/~2/c`, jsonptr.ErrSyntax, `/a/~2`},
+		{map[string]json.RawMessage{"a": json.RawMessage(`{`)}, `/a/b`, nil, ``}, // DocumentError
+		{[]json.RawMessage{json.RawMessage(`1`)}, `/1`, jsonptr.ErrIndex, `/1`},
+		{[]json.RawMessage{json.RawMessage(`1`)}, `/-`, jsonptr.ErrIndex, `/-`},
+		{[]json.RawMessage{json.RawMessage(`1`)}, `/x`, jsonptr.ErrSyntax, `/x`},
+		{[]json.RawMessage{json.RawMessage(`1`)}, `/1/x`, jsonptr.ErrIndex, `/1`},
+		{[]json.RawMessage{json.RawMessage(`[]`)}, `/0/x/y`, jsonptr.ErrSyntax, `/0/x`},
+		{[]json.RawMessage{json.RawMessage(`1`)}, `/0/x`, nil, ``}, // DocumentError
 	} {
 		doc := test.doc
 		_, err := jsonptr.Delete(&doc, test.ptr)
@@ -697,8 +745,33 @@ func TestDelete(t *testing.T) {
 			if !errors.As(err, &docErr) {
 				t.Errorf("%#v - %q: got %T %v, want *DocumentError", test.doc, test.ptr, err, err)
 			}
-		} else if !errors.Is(err, test.err) {
+			continue
+		}
+		if !errors.Is(err, test.err) {
 			t.Errorf("%#v - %q: got %T %v, want %v", test.doc, test.ptr, err, err, test.err)
+			continue
+		}
+		// ErrSyntax and ErrDeleteRoot are reported by a BadPointerError,
+		// ErrProperty and ErrIndex by a PtrError
+		var loc string
+		var badErr *jsonptr.BadPointerError
+		var ptrErr *jsonptr.PtrError
+		switch {
+		case errors.As(err, &badErr):
+			if test.err != jsonptr.ErrSyntax && test.err != jsonptr.ErrDeleteRoot {
+				t.Errorf("%#v - %q: got %T %v, want *PtrError", test.doc, test.ptr, err, err)
+				continue
+			}
+			loc = badErr.BadPtr
+		case errors.As(err, &ptrErr):
+			if test.err != jsonptr.ErrProperty && test.err != jsonptr.ErrIndex {
+				t.Errorf("%#v - %q: got %T %v, want *BadPointerError", test.doc, test.ptr, err, err)
+				continue
+			}
+			loc = ptrErr.Ptr
+		}
+		if test.loc != "" && loc != test.loc {
+			t.Errorf("%#v - %q: error located at %q, want %q", test.doc, test.ptr, loc, test.loc)
 		}
 	}
 }
