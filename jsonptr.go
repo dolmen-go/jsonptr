@@ -511,7 +511,8 @@ func set(doc *interface{}, ptr string, value interface{}) ptrError {
 		arr[n] = tmp
 		*doc = arr
 	default:
-		return docError(curPtr, parent)
+		// Report the location of parent itself: the caller rebases it
+		return docError("", parent)
 	}
 
 	return nil
@@ -699,6 +700,7 @@ func del(doc *interface{}, ptr string) (interface{}, ptrError) {
 		*doc = arr
 		return v, nil
 	default:
-		return nil, docError(curPtr, parent)
+		// Report the location of parent itself: the caller rebases it
+		return nil, docError("", parent)
 	}
 }

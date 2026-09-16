@@ -536,12 +536,12 @@ func TestSet(t *testing.T) {
 		{map[string]interface{}{"a": map[string]interface{}{}}, `/a/~2/x`, 1, jsonptr.ErrSyntax, `/a/~2`},
 		{map[string]interface{}{"a": map[string]interface{}{}}, `/a/~2`, 1, jsonptr.ErrSyntax, `/a/~2`},
 		{map[string]interface{}{}, `/a/x`, 1, jsonptr.ErrProperty, `/a`},
-		{map[string]interface{}{"a": 1}, `/a/x`, 1, nil, ``}, // DocumentError
+		{map[string]interface{}{"a": 1}, `/a/x`, 1, nil, `/a`}, // DocumentError
 		{[]interface{}{}, `/x/y`, 1, jsonptr.ErrSyntax, `/x`},
 		{[]interface{}{[]interface{}{}}, `/0/x/y`, 1, jsonptr.ErrSyntax, `/0/x`},
 		{[]interface{}{}, `/0/y`, 1, jsonptr.ErrIndex, `/0`},
 		{[]interface{}{}, `/-/y`, 1, jsonptr.ErrIndex, `/-`},
-		{[]interface{}{1}, `/0/y`, 1, nil, ``}, // DocumentError
+		{[]interface{}{1}, `/0/y`, 1, nil, `/0`}, // DocumentError
 		{map[string]json.RawMessage{}, `/~2/x`, 1, jsonptr.ErrSyntax, `/~2`},
 		{map[string]json.RawMessage{"a": json.RawMessage(`{}`)}, `/a/~2/x`, 1, jsonptr.ErrSyntax, `/a/~2`},
 		{[]json.RawMessage{}, `/x/y`, 1, jsonptr.ErrSyntax, `/x`},
@@ -551,13 +551,13 @@ func TestSet(t *testing.T) {
 		// Errors with partially deserialized containers
 		{map[string]json.RawMessage{}, `/~2`, 1, jsonptr.ErrSyntax, `/~2`},
 		{map[string]json.RawMessage{}, `/a/b`, 1, jsonptr.ErrProperty, `/a`},
-		{map[string]json.RawMessage{"a": json.RawMessage(`{`)}, `/a/b`, 1, nil, ``}, // DocumentError
-		{map[string]json.RawMessage{"a": json.RawMessage(`[`)}, `/a/-`, 1, nil, ``}, // DocumentError
-		{map[string]json.RawMessage{"a": json.RawMessage(`x`)}, `/a/b`, 1, nil, ``}, // DocumentError
-		{map[string]json.RawMessage{"a": json.RawMessage(``)}, `/a/b`, 1, nil, ``},  // DocumentError
+		{map[string]json.RawMessage{"a": json.RawMessage(`{`)}, `/a/b`, 1, nil, `/a`}, // DocumentError
+		{map[string]json.RawMessage{"a": json.RawMessage(`[`)}, `/a/-`, 1, nil, `/a`}, // DocumentError
+		{map[string]json.RawMessage{"a": json.RawMessage(`x`)}, `/a/b`, 1, nil, `/a`}, // DocumentError
+		{map[string]json.RawMessage{"a": json.RawMessage(``)}, `/a/b`, 1, nil, `/a`},  // DocumentError
 		{[]json.RawMessage{}, `/x`, 1, jsonptr.ErrSyntax, `/x`},
 		{[]json.RawMessage{}, `/0/b`, 1, jsonptr.ErrIndex, `/0`},
-		{[]json.RawMessage{json.RawMessage(`1`)}, `/0/b`, 1, nil, ``}, // DocumentError
+		{[]json.RawMessage{json.RawMessage(`1`)}, `/0/b`, 1, nil, `/0`}, // DocumentError
 	} {
 		doc := test.doc
 		err := jsonptr.Set(&doc, test.ptr, test.value)
@@ -565,28 +565,27 @@ func TestSet(t *testing.T) {
 			t.Errorf("%#v + %q: expected error", test.doc, test.ptr)
 			continue
 		}
-		if test.err == nil {
-			var docErr *jsonptr.DocumentError
-			if !errors.As(err, &docErr) {
-				t.Errorf("%#v + %q: got %T %v, want *DocumentError", test.doc, test.ptr, err, err)
-			}
-			continue
-		}
-		if !errors.Is(err, test.err) {
-			t.Errorf("%#v + %q: got %T %v, want %v", test.doc, test.ptr, err, err, test.err)
-			continue
-		}
-		if test.loc == "" {
-			continue
-		}
 		var loc string
+		var docErr *jsonptr.DocumentError
 		var badErr *jsonptr.BadPointerError
 		var ptrErr *jsonptr.PtrError
-		switch {
-		case errors.As(err, &badErr):
-			loc = badErr.BadPtr
-		case errors.As(err, &ptrErr):
-			loc = ptrErr.Ptr
+		if test.err == nil {
+			if !errors.As(err, &docErr) {
+				t.Errorf("%#v + %q: got %T %v, want *DocumentError", test.doc, test.ptr, err, err)
+				continue
+			}
+			loc = docErr.Ptr
+		} else {
+			if !errors.Is(err, test.err) {
+				t.Errorf("%#v + %q: got %T %v, want %v", test.doc, test.ptr, err, err, test.err)
+				continue
+			}
+			switch {
+			case errors.As(err, &badErr):
+				loc = badErr.BadPtr
+			case errors.As(err, &ptrErr):
+				loc = ptrErr.Ptr
+			}
 		}
 		if loc != test.loc {
 			t.Errorf("%#v + %q: error located at %q, want %q", test.doc, test.ptr, loc, test.loc)
@@ -712,27 +711,27 @@ func TestDelete(t *testing.T) {
 		{map[string]interface{}{}, `/a/b`, jsonptr.ErrProperty, `/a`},
 		{map[string]interface{}{"a": map[string]interface{}{}}, `/a/b/c`, jsonptr.ErrProperty, `/a/b`},
 		{map[string]interface{}{"a": map[string]interface{}{}}, `/a/~2/c`, jsonptr.ErrSyntax, `/a/~2`},
-		{map[string]interface{}{"a": 1}, `/a/b`, nil, ``}, // DocumentError
+		{map[string]interface{}{"a": 1}, `/a/b`, nil, `/a`}, // DocumentError
 		{[]interface{}{1}, `/1`, jsonptr.ErrIndex, `/1`},
 		{[]interface{}{1}, `/-`, jsonptr.ErrIndex, `/-`},
 		{[]interface{}{1}, `/1/x`, jsonptr.ErrIndex, `/1`},
 		{[]interface{}{1}, `/-/x`, jsonptr.ErrIndex, `/-`},
 		{[]interface{}{1}, `/x`, jsonptr.ErrSyntax, `/x`},
 		{[]interface{}{[]interface{}{}}, `/0/x/y`, jsonptr.ErrSyntax, `/0/x`},
-		{map[string]interface{}{"a": json.RawMessage(`{`)}, `/a/b`, nil, ``}, // DocumentError
-		{json.RawMessage(`{`), `/a`, nil, ``},                                // DocumentError
-		{json.NewDecoder(strings.NewReader(`[x]`)), `/0/a`, nil, ``},         // DocumentError
+		{map[string]interface{}{"a": json.RawMessage(`{`)}, `/a/b`, nil, `/a`}, // DocumentError
+		{json.RawMessage(`{`), `/a`, nil, ``},                                  // DocumentError
+		{json.NewDecoder(strings.NewReader(`[x]`)), `/0/a`, nil, ``},           // DocumentError
 		{map[string]json.RawMessage{}, `/a`, jsonptr.ErrProperty, `/a`},
 		{map[string]json.RawMessage{}, `/~2`, jsonptr.ErrSyntax, `/~2`},
 		{map[string]json.RawMessage{}, `/a/b`, jsonptr.ErrProperty, `/a`},
 		{map[string]json.RawMessage{"a": json.RawMessage(`{}`)}, `/a/~2/c`, jsonptr.ErrSyntax, `/a/~2`},
-		{map[string]json.RawMessage{"a": json.RawMessage(`{`)}, `/a/b`, nil, ``}, // DocumentError
+		{map[string]json.RawMessage{"a": json.RawMessage(`{`)}, `/a/b`, nil, `/a`}, // DocumentError
 		{[]json.RawMessage{json.RawMessage(`1`)}, `/1`, jsonptr.ErrIndex, `/1`},
 		{[]json.RawMessage{json.RawMessage(`1`)}, `/-`, jsonptr.ErrIndex, `/-`},
 		{[]json.RawMessage{json.RawMessage(`1`)}, `/x`, jsonptr.ErrSyntax, `/x`},
 		{[]json.RawMessage{json.RawMessage(`1`)}, `/1/x`, jsonptr.ErrIndex, `/1`},
 		{[]json.RawMessage{json.RawMessage(`[]`)}, `/0/x/y`, jsonptr.ErrSyntax, `/0/x`},
-		{[]json.RawMessage{json.RawMessage(`1`)}, `/0/x`, nil, ``}, // DocumentError
+		{[]json.RawMessage{json.RawMessage(`1`)}, `/0/x`, nil, `/0`}, // DocumentError
 	} {
 		doc := test.doc
 		_, err := jsonptr.Delete(&doc, test.ptr)
@@ -740,37 +739,39 @@ func TestDelete(t *testing.T) {
 			t.Errorf("%#v - %q: expected error", test.doc, test.ptr)
 			continue
 		}
-		if test.err == nil {
-			var docErr *jsonptr.DocumentError
-			if !errors.As(err, &docErr) {
-				t.Errorf("%#v - %q: got %T %v, want *DocumentError", test.doc, test.ptr, err, err)
-			}
-			continue
-		}
-		if !errors.Is(err, test.err) {
-			t.Errorf("%#v - %q: got %T %v, want %v", test.doc, test.ptr, err, err, test.err)
-			continue
-		}
-		// ErrSyntax and ErrDeleteRoot are reported by a BadPointerError,
-		// ErrProperty and ErrIndex by a PtrError
 		var loc string
+		var docErr *jsonptr.DocumentError
 		var badErr *jsonptr.BadPointerError
 		var ptrErr *jsonptr.PtrError
-		switch {
-		case errors.As(err, &badErr):
-			if test.err != jsonptr.ErrSyntax && test.err != jsonptr.ErrDeleteRoot {
-				t.Errorf("%#v - %q: got %T %v, want *PtrError", test.doc, test.ptr, err, err)
+		if test.err == nil {
+			if !errors.As(err, &docErr) {
+				t.Errorf("%#v - %q: got %T %v, want *DocumentError", test.doc, test.ptr, err, err)
 				continue
 			}
-			loc = badErr.BadPtr
-		case errors.As(err, &ptrErr):
-			if test.err != jsonptr.ErrProperty && test.err != jsonptr.ErrIndex {
-				t.Errorf("%#v - %q: got %T %v, want *BadPointerError", test.doc, test.ptr, err, err)
+			loc = docErr.Ptr
+		} else {
+			if !errors.Is(err, test.err) {
+				t.Errorf("%#v - %q: got %T %v, want %v", test.doc, test.ptr, err, err, test.err)
 				continue
 			}
-			loc = ptrErr.Ptr
+			// ErrSyntax and ErrDeleteRoot are reported by a BadPointerError,
+			// ErrProperty and ErrIndex by a PtrError
+			switch {
+			case errors.As(err, &badErr):
+				if test.err != jsonptr.ErrSyntax && test.err != jsonptr.ErrDeleteRoot {
+					t.Errorf("%#v - %q: got %T %v, want *PtrError", test.doc, test.ptr, err, err)
+					continue
+				}
+				loc = badErr.BadPtr
+			case errors.As(err, &ptrErr):
+				if test.err != jsonptr.ErrProperty && test.err != jsonptr.ErrIndex {
+					t.Errorf("%#v - %q: got %T %v, want *BadPointerError", test.doc, test.ptr, err, err)
+					continue
+				}
+				loc = ptrErr.Ptr
+			}
 		}
-		if test.loc != "" && loc != test.loc {
+		if loc != test.loc {
 			t.Errorf("%#v - %q: error located at %q, want %q", test.doc, test.ptr, loc, test.loc)
 		}
 	}
