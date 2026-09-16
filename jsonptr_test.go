@@ -586,15 +586,17 @@ func TestSet(t *testing.T) {
 		{map[string]interface{}{"a": map[string]interface{}{}}, `/a/~2`, 1, jsonptr.ErrSyntax, `/a/~2`},
 		{map[string]interface{}{}, `/a/x`, 1, jsonptr.ErrProperty, `/a`},
 		{map[string]interface{}{"a": 1}, `/a/x`, 1, nil, `/a`}, // DocumentError
-		{[]interface{}{}, `/x/y`, 1, jsonptr.ErrSyntax, `/x`},
-		{[]interface{}{[]interface{}{}}, `/0/x/y`, 1, jsonptr.ErrSyntax, `/0/x`},
+		{[]interface{}{}, `/x/y`, 1, jsonptr.ErrIndex, `/x`},
+		{[]interface{}{[]interface{}{}}, `/0/x/y`, 1, jsonptr.ErrIndex, `/0/x`},
+		{[]interface{}{[]interface{}{}}, `/0/~2/y`, 1, jsonptr.ErrSyntax, `/0/~2`},
+		{[]interface{}{}, `/~`, 1, jsonptr.ErrSyntax, `/~`},
 		{[]interface{}{}, `/0/y`, 1, jsonptr.ErrIndex, `/0`},
 		{[]interface{}{}, `/-/y`, 1, jsonptr.ErrIndex, `/-`},
 		{[]interface{}{1}, `/0/y`, 1, nil, `/0`}, // DocumentError
 		{map[string]json.RawMessage{}, `/~2/x`, 1, jsonptr.ErrSyntax, `/~2`},
 		{map[string]json.RawMessage{"a": json.RawMessage(`{}`)}, `/a/~2/x`, 1, jsonptr.ErrSyntax, `/a/~2`},
-		{[]json.RawMessage{}, `/x/y`, 1, jsonptr.ErrSyntax, `/x`},
-		{[]json.RawMessage{json.RawMessage(`[]`)}, `/0/x/y`, 1, jsonptr.ErrSyntax, `/0/x`},
+		{[]json.RawMessage{}, `/x/y`, 1, jsonptr.ErrIndex, `/x`},
+		{[]json.RawMessage{json.RawMessage(`[]`)}, `/0/x/y`, 1, jsonptr.ErrIndex, `/0/x`},
 		{json.NewDecoder(strings.NewReader(`{`)), `/a`, 1, nil, ``},     // DocumentError
 		{json.NewDecoder(strings.NewReader(`[x]`)), `/0/a`, 1, nil, ``}, // DocumentError
 		// Errors with partially deserialized containers
@@ -604,7 +606,7 @@ func TestSet(t *testing.T) {
 		{map[string]json.RawMessage{"a": json.RawMessage(`[`)}, `/a/-`, 1, nil, `/a`}, // DocumentError
 		{map[string]json.RawMessage{"a": json.RawMessage(`x`)}, `/a/b`, 1, nil, `/a`}, // DocumentError
 		{map[string]json.RawMessage{"a": json.RawMessage(``)}, `/a/b`, 1, nil, `/a`},  // DocumentError
-		{[]json.RawMessage{}, `/x`, 1, jsonptr.ErrSyntax, `/x`},
+		{[]json.RawMessage{}, `/x`, 1, jsonptr.ErrIndex, `/x`},
 		{[]json.RawMessage{}, `/0/b`, 1, jsonptr.ErrIndex, `/0`},
 		{[]json.RawMessage{json.RawMessage(`1`)}, `/0/b`, 1, nil, `/0`}, // DocumentError
 	} {
@@ -765,8 +767,10 @@ func TestDelete(t *testing.T) {
 		{[]interface{}{1}, `/-`, jsonptr.ErrIndex, `/-`},
 		{[]interface{}{1}, `/1/x`, jsonptr.ErrIndex, `/1`},
 		{[]interface{}{1}, `/-/x`, jsonptr.ErrIndex, `/-`},
-		{[]interface{}{1}, `/x`, jsonptr.ErrSyntax, `/x`},
-		{[]interface{}{[]interface{}{}}, `/0/x/y`, jsonptr.ErrSyntax, `/0/x`},
+		{[]interface{}{1}, `/x`, jsonptr.ErrIndex, `/x`},
+		{[]interface{}{[]interface{}{}}, `/0/x/y`, jsonptr.ErrIndex, `/0/x`},
+		{[]interface{}{[]interface{}{}}, `/0/~2/y`, jsonptr.ErrSyntax, `/0/~2`},
+		{[]interface{}{1}, `/~`, jsonptr.ErrSyntax, `/~`},
 		{map[string]interface{}{"a": json.RawMessage(`{`)}, `/a/b`, nil, `/a`}, // DocumentError
 		{json.RawMessage(`{`), `/a`, nil, ``},                                  // DocumentError
 		{json.NewDecoder(strings.NewReader(`[x]`)), `/0/a`, nil, ``},           // DocumentError
@@ -777,9 +781,9 @@ func TestDelete(t *testing.T) {
 		{map[string]json.RawMessage{"a": json.RawMessage(`{`)}, `/a/b`, nil, `/a`}, // DocumentError
 		{[]json.RawMessage{json.RawMessage(`1`)}, `/1`, jsonptr.ErrIndex, `/1`},
 		{[]json.RawMessage{json.RawMessage(`1`)}, `/-`, jsonptr.ErrIndex, `/-`},
-		{[]json.RawMessage{json.RawMessage(`1`)}, `/x`, jsonptr.ErrSyntax, `/x`},
+		{[]json.RawMessage{json.RawMessage(`1`)}, `/x`, jsonptr.ErrIndex, `/x`},
 		{[]json.RawMessage{json.RawMessage(`1`)}, `/1/x`, jsonptr.ErrIndex, `/1`},
-		{[]json.RawMessage{json.RawMessage(`[]`)}, `/0/x/y`, jsonptr.ErrSyntax, `/0/x`},
+		{[]json.RawMessage{json.RawMessage(`[]`)}, `/0/x/y`, jsonptr.ErrIndex, `/0/x`},
 		{[]json.RawMessage{json.RawMessage(`1`)}, `/0/x`, nil, `/0`}, // DocumentError
 	} {
 		doc := test.doc

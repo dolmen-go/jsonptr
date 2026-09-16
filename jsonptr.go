@@ -457,7 +457,7 @@ func set(doc *interface{}, ptr string, value interface{}) ptrError {
 	case []interface{}:
 		n, err := arrayIndex(prop)
 		if err != nil {
-			return &BadPointerError{curPtr, err}
+			return badIndexError(curPtr, prop)
 		}
 		var tmp interface{}
 		if n >= 0 && n < len(parent) {
@@ -486,7 +486,7 @@ func set(doc *interface{}, ptr string, value interface{}) ptrError {
 	case []json.RawMessage:
 		n, err := arrayIndex(prop)
 		if err != nil {
-			return &BadPointerError{curPtr, err}
+			return badIndexError(curPtr, prop)
 		}
 		var tmp interface{}
 		if n >= 0 && n < len(parent) {
@@ -648,7 +648,7 @@ func del(doc *interface{}, ptr string) (interface{}, ptrError) {
 	case []interface{}:
 		n, err := arrayIndex(prop)
 		if err != nil {
-			return nil, &BadPointerError{curPtr, err}
+			return nil, badIndexError(curPtr, prop)
 		}
 		if n < 0 || n >= len(parent) {
 			return nil, indexError(curPtr)
@@ -675,7 +675,7 @@ func del(doc *interface{}, ptr string) (interface{}, ptrError) {
 	case []json.RawMessage:
 		n, err := arrayIndex(prop)
 		if err != nil {
-			return nil, &BadPointerError{curPtr, err}
+			return nil, badIndexError(curPtr, prop)
 		}
 		if n < 0 || n >= len(parent) {
 			return nil, indexError(curPtr)
