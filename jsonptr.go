@@ -124,7 +124,7 @@ func getJSON(decoder JSONDecoder, ptr string) (interface{}, ptrError) {
 		case '[':
 			n, err := arrayIndex(cur)
 			if err != nil {
-				return nil, &BadPointerError{ptr[:p], err}
+				return nil, badIndexError(ptr[:p], cur)
 			}
 			if n < 0 {
 				return nil, indexError(ptr[:p])
@@ -237,7 +237,7 @@ func Get(doc interface{}, ptr string) (interface{}, error) {
 		case []interface{}:
 			n, err := arrayIndex(cur[:q])
 			if err != nil {
-				return nil, &BadPointerError{ptr[:p], err}
+				return nil, badIndexError(ptr[:p], cur[:q])
 			}
 			if n < 0 || n >= len(here) {
 				return nil, indexError(ptr[:p])
@@ -255,7 +255,7 @@ func Get(doc interface{}, ptr string) (interface{}, error) {
 		case []json.RawMessage:
 			n, err := arrayIndex(cur[:q])
 			if err != nil {
-				return nil, &BadPointerError{ptr[:p], err}
+				return nil, badIndexError(ptr[:p], cur[:q])
 			}
 			if n < 0 || n >= len(here) {
 				return nil, indexError(ptr[:p])

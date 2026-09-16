@@ -184,6 +184,18 @@ func (tester *getTester) runTest() {
 	tester.checkGetError(`[1,2]`, `/-`, jsonptr.ErrIndex, `/-`)
 	tester.checkGetError(`{"a":[[1],[2]]}`, `/a/1/1`, jsonptr.ErrIndex, `/a/1/1`)
 	tester.checkGetError(`{"a":[[1],[2]]}`, `/a/2/0`, jsonptr.ErrIndex, `/a/2`)
+	// Not an index: a navigation error, like a missing property
+	tester.checkGetError(`[1]`, `/x`, jsonptr.ErrIndex, `/x`)
+	tester.checkGetError(`[1]`, `/`, jsonptr.ErrIndex, `/`)
+	tester.checkGetError(`[1]`, `/01`, jsonptr.ErrIndex, `/01`)
+	tester.checkGetError(`[1]`, `/-1`, jsonptr.ErrIndex, `/-1`)
+	tester.checkGetError(`[1]`, `/1e0`, jsonptr.ErrIndex, `/1e0`)
+	tester.checkGetError(`[1]`, `/99999999999999999999`, jsonptr.ErrIndex, `/99999999999999999999`)
+	tester.checkGetError(`{"a":[1]}`, `/a/x/y`, jsonptr.ErrIndex, `/a/x`)
+	tester.checkGetError(`{"a":[[1]]}`, `/a/0/x`, jsonptr.ErrIndex, `/a/0/x`)
+	// But a bad escape is a syntax error, whatever the container
+	tester.checkGetError(`[1]`, `/~2`, jsonptr.ErrSyntax, `/~2`)
+	tester.checkGetError(`{"a":[1]}`, `/a/~/x`, jsonptr.ErrSyntax, `/a/~`)
 	// Invalid escape: the error is located at the bad token
 	tester.checkGetError(`{"a":{"b":1}}`, `/a/~2`, jsonptr.ErrSyntax, `/a/~2`)
 	tester.checkGetError(`{"a":{"b":1}}`, `/a/~2/x`, jsonptr.ErrSyntax, `/a/~2`)

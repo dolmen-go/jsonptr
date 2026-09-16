@@ -84,6 +84,16 @@ func indexError(ptr string) *PtrError {
 	return &PtrError{ptr, ErrIndex}
 }
 
+// badIndexError reports a token which is not a valid array index (as told by
+// arrayIndex): a BadPointerError if the token is not even a valid pointer
+// token (bad escape), else a PtrError wrapping ErrIndex.
+func badIndexError(ptr string, token string) ptrError {
+	if _, err := UnescapeString(token); err != nil {
+		return &BadPointerError{ptr, err}
+	}
+	return indexError(ptr)
+}
+
 func propertyError(ptr string) *PtrError {
 	return &PtrError{ptr, ErrProperty}
 }
