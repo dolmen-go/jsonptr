@@ -477,8 +477,8 @@ func TestSet(t *testing.T) {
 	}
 	// An invalid JSONDecoder value is rejected, the document is left untouched
 	doc = map[string]interface{}{}
-	if err := jsonptr.Set(&doc, `/a`, json.NewDecoder(strings.NewReader(`{`))); err == nil {
-		t.Errorf("invalid JSONDecoder value: expected error")
+	if err := jsonptr.Set(&doc, `/a`, json.NewDecoder(strings.NewReader(`{`))); !errors.As(err, &docErr) {
+		t.Errorf("invalid JSONDecoder value: got %T %v, want *DocumentError", err, err)
 	} else if !reflect.DeepEqual(doc, map[string]interface{}{}) {
 		t.Errorf("invalid JSONDecoder value: got %#v", doc)
 	}
@@ -491,6 +491,7 @@ func TestSet(t *testing.T) {
 		err   error
 		loc   string // location reported in the error (not checked if empty)
 	}{
+		{map[string]interface{}{}, `a`, 1, jsonptr.ErrSyntax, `a`},
 		{map[string]interface{}{}, `/~2/x`, 1, jsonptr.ErrSyntax, `/~2`},
 		{map[string]interface{}{"a": map[string]interface{}{}}, `/a/~2/x`, 1, jsonptr.ErrSyntax, `/a/~2`},
 		{map[string]interface{}{"a": map[string]interface{}{}}, `/a/~2`, 1, jsonptr.ErrSyntax, `/a/~2`},

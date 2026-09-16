@@ -468,19 +468,32 @@ func rawValue(value interface{}) (json.RawMessage, error) {
 func Set(doc *interface{}, ptr string, value interface{}) error {
 	if dec, isDec := value.(JSONDecoder); isDec {
 		var raw json.RawMessage
-		err := dec.Decode(&raw)
-		if err != nil {
-			return fmt.Errorf("invalid value to inject: %w", err)
+		if err := dec.Decode(&raw); err != nil {
+			return &DocumentError{"", fmt.Errorf("invalid value to inject: %w", err)}
 		}
 		value = raw
 	}
+	if len(ptr) != 0 && ptr[0] != '/' {
+		return syntaxError(ptr)
+	}
 
+	// Convert a nil ptrError to a nil error
+	if err := set(doc, ptr, value); err != nil {
+		return err
+	}
+	return nil
+}
+
+// set is the recursive implementation of [Set]: it follows the first token
+// of ptr into *doc, calls itself on the child with the rest of the path, then
+// stores the child back into *doc.
+//
+// ptr is either empty or starts with '/'. Errors are located relatively to
+// *doc: the caller rebases them.
+func set(doc *interface{}, ptr string, value interface{}) ptrError {
 	if len(ptr) == 0 {
 		*doc = value
 		return nil
-	}
-	if ptr[0] != '/' {
-		return syntaxError(ptr)
 	}
 
 	if raw, ok := (*doc).(JSONDecoder); ok {
@@ -520,8 +533,8 @@ func Set(doc *interface{}, ptr string, value interface{}) error {
 			// Only the leaf may be created
 			return propertyError(curPtr)
 		}
-		if err := Set(&tmp, nextPtr, value); err != nil {
-			err.(ptrError).rebase(curPtr)
+		if err := set(&tmp, nextPtr, value); err != nil {
+			err.rebase(curPtr)
 			return err
 		}
 		if parent != nil {
@@ -542,8 +555,8 @@ func Set(doc *interface{}, ptr string, value interface{}) error {
 			// Only the leaf may be created
 			return propertyError(curPtr)
 		}
-		if err := Set(&tmp, nextPtr, value); err != nil {
-			err.(ptrError).rebase(curPtr)
+		if err := set(&tmp, nextPtr, value); err != nil {
+			err.rebase(curPtr)
 			return err
 		}
 		if parent != nil {
@@ -568,8 +581,8 @@ func Set(doc *interface{}, ptr string, value interface{}) error {
 			// Only the leaf may be created
 			return indexError(curPtr)
 		}
-		if err := Set(&tmp, nextPtr, value); err != nil {
-			err.(ptrError).rebase(curPtr)
+		if err := set(&tmp, nextPtr, value); err != nil {
+			err.rebase(curPtr)
 			return err
 		}
 		if n == -1 {
@@ -593,8 +606,8 @@ func Set(doc *interface{}, ptr string, value interface{}) error {
 			// Only the leaf may be created
 			return indexError(curPtr)
 		}
-		if err := Set(&tmp, nextPtr, value); err != nil {
-			err.(ptrError).rebase(curPtr)
+		if err := set(&tmp, nextPtr, value); err != nil {
+			err.rebase(curPtr)
 			return err
 		}
 		if n == -1 {
