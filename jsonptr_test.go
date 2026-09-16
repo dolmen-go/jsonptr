@@ -21,64 +21,67 @@ type getTester struct {
 	Get func(interface{}, string) (interface{}, error)
 }
 
-func (tester *getTester) checkGet(jsonData string, ptr string, expected interface{}) {
-	t := tester.t
-	t.Logf("%v => \"%v\"", jsonData, ptr)
-	var data interface{}
-	if err := json.Unmarshal([]byte(jsonData), &data); err != nil {
-		t.Logf("Can't unmarshal %v: %s\n", jsonData, err)
-		t.Fail()
-		return
-	}
-
-	// Get from a deserialized structure
-	got, err := tester.Get(data, ptr)
-	if err != nil {
-		t.Fatalf("  unexpected error: %s\n", err)
-		return
-	}
-	if !reflect.DeepEqual(got, expected) {
-		t.Fatalf("Result error!\n  expected: %T %v\n       got: %T %v\n", expected, expected, got, got)
-		return
-	}
-
-	// Get from the raw JSON document
-	got, err = tester.Get(json.RawMessage(jsonData), ptr)
-	if err != nil {
-		t.Fatalf("  unexpected error: %s\n", err)
-		return
-	}
-	if !reflect.DeepEqual(got, expected) {
-		t.Fatalf("Result error!\n  expected: %T %v\n       got: %T %v\n", expected, expected, got, got)
-	}
-
-	// Get from the raw JSON document
-	got, err = tester.Get(json.NewDecoder(strings.NewReader(jsonData)), ptr)
-	if err != nil {
-		t.Fatalf("  unexpected error: %s\n", err)
-		return
-	}
-	if !reflect.DeepEqual(got, expected) {
-		t.Fatalf("Result error!\n  expected: %T %v\n       got: %T %v\n", expected, expected, got, got)
-	}
-}
-
-// checkGetError checks that tester.Get fails with a PtrError wrapping
-// expectedErr located at expectedPtr, for the same document given as a
-// deserialized structure, as a json.RawMessage and as a *json.Decoder.
-func (tester *getTester) checkGetError(jsonData string, ptr string, expectedErr error, expectedPtr string) {
-	t := tester.t
-	t.Logf("%v => \"%v\" (error expected)", jsonData, ptr)
+// docForms returns the same JSON document in all the forms accepted by Get:
+// fully deserialized, raw, streamed, and partially deserialized
+// (map[string]json.RawMessage or []json.RawMessage) when the document is an
+// object or an array.
+//
+// The partially deserialized forms are omitted for the root pointer as Get
+// would return them as-is, which is not comparable with the expected value.
+func docForms(t *testing.T, jsonData string, ptr string) []interface{} {
 	var data interface{}
 	if err := json.Unmarshal([]byte(jsonData), &data); err != nil {
 		t.Fatalf("Can't unmarshal %v: %s\n", jsonData, err)
 	}
-
-	for _, doc := range []interface{}{
+	docs := []interface{}{
 		data,
 		json.RawMessage(jsonData),
 		json.NewDecoder(strings.NewReader(jsonData)),
-	} {
+	}
+	if ptr == "" {
+		return docs
+	}
+	switch data.(type) {
+	case map[string]interface{}:
+		var partial map[string]json.RawMessage
+		if err := json.Unmarshal([]byte(jsonData), &partial); err != nil {
+			t.Fatalf("Can't unmarshal %v: %s\n", jsonData, err)
+		}
+		docs = append(docs, partial)
+	case []interface{}:
+		var partial []json.RawMessage
+		if err := json.Unmarshal([]byte(jsonData), &partial); err != nil {
+			t.Fatalf("Can't unmarshal %v: %s\n", jsonData, err)
+		}
+		docs = append(docs, partial)
+	}
+	return docs
+}
+
+func (tester *getTester) checkGet(jsonData string, ptr string, expected interface{}) {
+	t := tester.t
+	t.Logf("%v => \"%v\"", jsonData, ptr)
+
+	for _, doc := range docForms(t, jsonData, ptr) {
+		got, err := tester.Get(doc, ptr)
+		if err != nil {
+			t.Errorf("  %T: unexpected error: %s", doc, err)
+			continue
+		}
+		if !reflect.DeepEqual(got, expected) {
+			t.Errorf("  %T: result error!\n  expected: %T %v\n       got: %T %v", doc, expected, expected, got, got)
+		}
+	}
+}
+
+// checkGetError checks that tester.Get fails with a PtrError wrapping
+// expectedErr located at expectedPtr, for the same document given in all the
+// forms returned by docForms.
+func (tester *getTester) checkGetError(jsonData string, ptr string, expectedErr error, expectedPtr string) {
+	t := tester.t
+	t.Logf("%v => \"%v\" (error expected)", jsonData, ptr)
+
+	for _, doc := range docForms(t, jsonData, ptr) {
 		got, err := tester.Get(doc, ptr)
 		if err == nil {
 			t.Errorf("  %T: unexpected success: got %T %v", doc, got, got)
@@ -159,6 +162,69 @@ func (tester *getTester) runTest() {
 	tester.checkGetError(`[1,2]`, `/-`, jsonptr.ErrIndex, `/-`)
 	tester.checkGetError(`{"a":[[1],[2]]}`, `/a/1/1`, jsonptr.ErrIndex, `/a/1/1`)
 	tester.checkGetError(`{"a":[[1],[2]]}`, `/a/2/0`, jsonptr.ErrIndex, `/a/2`)
+
+	// Partially deserialized containers mixed at various levels
+	mixed := map[string]interface{}{
+		"a": []json.RawMessage{
+			json.RawMessage(`{"b":[1,2]}`),
+			json.RawMessage(`"x"`),
+		},
+		"c": map[string]json.RawMessage{
+			"d": json.RawMessage(`[true]`),
+			"~": json.RawMessage(`null`),
+		},
+		"e": []interface{}{
+			map[string]json.RawMessage{"f": json.RawMessage(`{"g":3}`)},
+		},
+	}
+	for _, test := range []struct {
+		ptr      string
+		expected interface{}
+	}{
+		{`/a/0/b/1`, float64(2)},
+		{`/a/1`, "x"},
+		{`/c/d/0`, true},
+		{`/c/~0`, nil},
+		{`/e/0/f/g`, float64(3)},
+		{`/e/0/f`, map[string]interface{}{"g": float64(3)}},
+		// Partially deserialized containers are returned as-is when they are the leaf
+		{`/a`, mixed["a"]},
+		{`/c`, mixed["c"]},
+		{`/e/0`, mixed["e"].([]interface{})[0]},
+	} {
+		t.Logf("mixed => %q", test.ptr)
+		got, err := tester.Get(mixed, test.ptr)
+		if err != nil {
+			t.Errorf("  unexpected error: %s", err)
+			continue
+		}
+		if !reflect.DeepEqual(got, test.expected) {
+			t.Errorf("  expected: %T %v\n       got: %T %v", test.expected, test.expected, got, got)
+		}
+	}
+	for _, test := range []struct {
+		ptr string
+		err error
+		loc string
+	}{
+		{`/a/2`, jsonptr.ErrIndex, `/a/2`},
+		{`/a/-`, jsonptr.ErrIndex, `/a/-`},
+		{`/a/0/x`, jsonptr.ErrProperty, `/a/0/x`},
+		{`/c/x`, jsonptr.ErrProperty, `/c/x`},
+		{`/c/d/1`, jsonptr.ErrIndex, `/c/d/1`},
+		{`/e/0/x`, jsonptr.ErrProperty, `/e/0/x`},
+	} {
+		t.Logf("mixed => %q (error expected)", test.ptr)
+		_, err := tester.Get(mixed, test.ptr)
+		var perr *jsonptr.PtrError
+		if !errors.As(err, &perr) || !errors.Is(err, test.err) {
+			t.Errorf("  got %T %v, want *PtrError %v", err, err, test.err)
+			continue
+		}
+		if perr.Ptr != test.loc {
+			t.Errorf("  error located at %q, want %q", perr.Ptr, test.loc)
+		}
+	}
 }
 
 func TestGet(t *testing.T) {
@@ -260,6 +326,271 @@ func TestSet(t *testing.T) {
 	if !errors.As(err, &docErr) {
 		t.Errorf("invalid nested JSON: got %T %v, want *DocumentError", err, err)
 	}
+
+	// Partially deserialized containers as direct parent: the value is stored
+	// as a json.RawMessage
+	checkSet(t, map[string]json.RawMessage{}, `/a`, 1, `{"a":1}`)
+	checkSet(t, map[string]json.RawMessage(nil), `/a`, 1, `{"a":1}`)
+	checkSet(t, map[string]json.RawMessage{"a": json.RawMessage(`1`)}, `/a`, "x", `{"a":"x"}`)
+	checkSet(t, map[string]json.RawMessage{"a": json.RawMessage(`1`)}, `/~1`, []int{1}, `{"/":[1],"a":1}`)
+	checkSet(t, map[string]json.RawMessage{}, `/a`, json.RawMessage(`{"x":1}`), `{"a":{"x":1}}`)
+	checkSet(t, map[string]json.RawMessage{}, `/a`, json.NewDecoder(strings.NewReader(`[1]`)), `{"a":[1]}`)
+	checkSet(t, []json.RawMessage{}, `/-`, true, `[true]`)
+	checkSet(t, []json.RawMessage(nil), `/-`, true, `[true]`)
+	checkSet(t, []json.RawMessage{json.RawMessage(`1`)}, `/0`, "x", `["x"]`)
+	checkSet(t, []json.RawMessage{json.RawMessage(`1`)}, `/-`, 2, `[1,2]`)
+	checkSet(t, []json.RawMessage{json.RawMessage(`1`)}, `/3`, 2, `[1,null,null,2]`)
+	checkSet(t, []json.RawMessage{}, `/0`, json.RawMessage(`{}`), `[{}]`)
+	checkSet(t, map[string]interface{}{"a": []json.RawMessage{}}, `/a/-`, true, `{"a":[true]}`)
+	checkSet(t, map[string]interface{}{"a": map[string]json.RawMessage{}}, `/a/b`, nil, `{"a":{"b":null}}`)
+	// Partially deserialized containers traversed on the path
+	checkSet(t, map[string]json.RawMessage{"a": json.RawMessage(`{"b":1}`)}, `/a/b`, 2, `{"a":{"b":2}}`)
+	checkSet(t, map[string]json.RawMessage{"a": json.RawMessage(`{"b":1}`), "c": json.RawMessage(`[]`)}, `/c/-`, 2, `{"a":{"b":1},"c":[2]}`)
+	checkSet(t, []json.RawMessage{json.RawMessage(`[1]`), json.RawMessage(`{}`)}, `/0/-`, 2, `[[1,2],{}]`)
+	checkSet(t, []json.RawMessage{json.RawMessage(`[1]`), json.RawMessage(`{}`)}, `/1/x`, 2, `[[1],{"x":2}]`)
+	checkSet(t, map[string]json.RawMessage{"a": json.RawMessage(`[{"b":[]}]`)}, `/a/0/b/-`, 2, `{"a":[{"b":[2]}]}`)
+	checkSet(t, map[string]interface{}{"a": map[string]json.RawMessage{"b": json.RawMessage(`[1]`)}}, `/a/b/-`, 2, `{"a":{"b":[1,2]}}`)
+	checkSet(t, []interface{}{[]json.RawMessage{json.RawMessage(`{"x":1}`)}}, `/0/0/x`, 2, `[[{"x":2}]]`)
+
+	// Shape of the tree after Set: every container on the path (including a
+	// partially deserialized one, and the direct parent) ends up as a
+	// map[string]interface{} or []interface{}, the untouched entries are kept
+	// raw, and the value is stored as-is (a JSONDecoder value is drained into
+	// a json.RawMessage)
+	for _, test := range []struct {
+		doc      interface{}
+		ptr      string
+		value    interface{}
+		expected interface{}
+	}{
+		// Partially deserialized direct parent
+		{
+			map[string]json.RawMessage{"b": json.RawMessage(`2`)}, `/a`, 1,
+			map[string]interface{}{"a": 1, "b": json.RawMessage(`2`)},
+		},
+		{
+			[]json.RawMessage{json.RawMessage(`1`)}, `/-`, 2,
+			[]interface{}{json.RawMessage(`1`), 2},
+		},
+		// Partially deserialized container traversed on the path
+		{
+			map[string]json.RawMessage{"a": json.RawMessage(`{}`), "b": json.RawMessage(`{"c":1}`)}, `/a/x`, 1,
+			map[string]interface{}{
+				"a": map[string]interface{}{"x": 1},
+				"b": json.RawMessage(`{"c":1}`),
+			},
+		},
+		// Lazy decoding of raw documents: only the containers on the path are
+		// decoded, one layer each
+		{
+			json.RawMessage(`{"a":{"b":1},"c":{"d":2}}`), `/a/x`, 3,
+			map[string]interface{}{
+				"a": map[string]interface{}{"b": json.RawMessage(`1`), "x": 3},
+				"c": json.RawMessage(`{"d":2}`),
+			},
+		},
+		{
+			json.RawMessage(`[[1],[2]]`), `/0/-`, 9,
+			[]interface{}{
+				[]interface{}{json.RawMessage(`1`), 9},
+				json.RawMessage(`[2]`),
+			},
+		},
+		{
+			json.RawMessage(`{"a":[{"b":{"c":1},"d":2},{"e":3}],"f":4}`), `/a/0/b/x`, true,
+			map[string]interface{}{
+				"a": []interface{}{
+					map[string]interface{}{
+						"b": map[string]interface{}{"c": json.RawMessage(`1`), "x": true},
+						"d": json.RawMessage(`2`),
+					},
+					json.RawMessage(`{"e":3}`),
+				},
+				"f": json.RawMessage(`4`),
+			},
+		},
+		// Raw direct parent
+		{
+			json.RawMessage(`{"a":{"b":1}}`), `/x`, 2,
+			map[string]interface{}{"a": json.RawMessage(`{"b":1}`), "x": 2},
+		},
+		{
+			json.RawMessage(`[[1]]`), `/-`, 2,
+			[]interface{}{json.RawMessage(`[1]`), 2},
+		},
+		// Leading whitespace
+		{
+			json.RawMessage(" \n\t{\"a\":1}"), `/b`, 2,
+			map[string]interface{}{"a": json.RawMessage(`1`), "b": 2},
+		},
+		// Streamed document
+		{
+			json.NewDecoder(strings.NewReader(`{"a":{"b":1},"c":2}`)), `/a/x`, 3,
+			map[string]interface{}{
+				"a": map[string]interface{}{"b": json.RawMessage(`1`), "x": 3},
+				"c": json.RawMessage(`2`),
+			},
+		},
+		// Nested in a tree
+		{
+			map[string]interface{}{"a": json.RawMessage(`{"b":{},"c":1}`)}, `/a/b/x`, 2,
+			map[string]interface{}{
+				"a": map[string]interface{}{
+					"b": map[string]interface{}{"x": 2},
+					"c": json.RawMessage(`1`),
+				},
+			},
+		},
+		// Values: a json.RawMessage is stored as-is, a JSONDecoder is drained
+		// into a json.RawMessage (both at root and deeper)
+		{
+			map[string]interface{}{}, `/a`, json.RawMessage(`{"x":1}`),
+			map[string]interface{}{"a": json.RawMessage(`{"x":1}`)},
+		},
+		{
+			map[string]interface{}{}, ``, json.RawMessage(`{"x":1}`),
+			json.RawMessage(`{"x":1}`),
+		},
+		{
+			map[string]interface{}{}, `/a`, json.NewDecoder(strings.NewReader(`{"x":1} 2`)),
+			map[string]interface{}{"a": json.RawMessage(`{"x":1}`)},
+		},
+		{
+			map[string]interface{}{}, ``, json.NewDecoder(strings.NewReader(`[1] 2`)),
+			json.RawMessage(`[1]`),
+		},
+	} {
+		t.Logf("shape: %s + %q", jsonptr.MustValue(json.Marshal(test.doc)), test.ptr)
+		doc := test.doc
+		if err := jsonptr.Set(&doc, test.ptr, test.value); err != nil {
+			t.Errorf("  unexpected error: %v", err)
+		} else if !reflect.DeepEqual(doc, test.expected) {
+			t.Errorf("  got  %#v\n  want %#v", doc, test.expected)
+		}
+	}
+	// A raw scalar can't be traversed; the document is left untouched on error
+	doc = json.RawMessage(` 1`)
+	if err := jsonptr.Set(&doc, `/a`, 1); !errors.As(err, &docErr) {
+		t.Errorf("raw scalar: got %T %v, want *DocumentError", err, err)
+	} else if !reflect.DeepEqual(doc, json.RawMessage(` 1`)) {
+		t.Errorf("raw scalar: got %#v", doc)
+	}
+	// On error, a JSONDecoder on the path that has been read is replaced in
+	// the tree by the raw value read, so the document stays usable
+	for _, test := range []struct {
+		doc      interface{}
+		ptr      string
+		expected interface{} // document after the failed Set
+		get      string      // a pointer through the decoder, that must still resolve
+	}{
+		{
+			map[string]interface{}{"a": json.NewDecoder(strings.NewReader(`{"b":1} "next"`))}, `/a/x/y`,
+			map[string]interface{}{"a": json.RawMessage(`{"b":1}`)}, `/a/b`,
+		},
+		{
+			[]interface{}{json.NewDecoder(strings.NewReader(`[1] "next"`))}, `/0/5/y`,
+			[]interface{}{json.RawMessage(`[1]`)}, `/0/0`,
+		},
+		// Failure below the decoder, in a lazily decoded layer
+		{
+			map[string]interface{}{"a": json.NewDecoder(strings.NewReader(`{"b":{"c":1},"d":2}`))}, `/a/b/c/x`,
+			map[string]interface{}{"a": json.RawMessage(`{"b":{"c":1},"d":2}`)}, `/a/b/c`,
+		},
+		// Decoder at the root
+		{
+			json.NewDecoder(strings.NewReader(`{"b":1}`)), `/x/y`,
+			json.RawMessage(`{"b":1}`), `/b`,
+		},
+	} {
+		t.Logf("failed Set through a JSONDecoder: %q", test.ptr)
+		doc := test.doc
+		if err := jsonptr.Set(&doc, test.ptr, 1); err == nil {
+			t.Errorf("  expected error")
+		} else if !reflect.DeepEqual(doc, test.expected) {
+			t.Errorf("  got  %#v\n  want %#v", doc, test.expected)
+		}
+		// The document is still usable
+		if _, err := jsonptr.Get(doc, test.get); err != nil {
+			t.Errorf("  Get %q after failed Set: unexpected error: %v", test.get, err)
+		}
+	}
+
+	// An invalid JSONDecoder value is rejected, the document is left untouched
+	doc = map[string]interface{}{}
+	if err := jsonptr.Set(&doc, `/a`, json.NewDecoder(strings.NewReader(`{`))); !errors.As(err, &docErr) {
+		t.Errorf("invalid JSONDecoder value: got %T %v, want *DocumentError", err, err)
+	} else if !reflect.DeepEqual(doc, map[string]interface{}{}) {
+		t.Errorf("invalid JSONDecoder value: got %#v", doc)
+	}
+
+	// Navigation errors on the path to the parent
+	for _, test := range []struct {
+		doc   interface{}
+		ptr   string
+		value interface{}
+		err   error
+		loc   string // location reported in the error (not checked if empty)
+	}{
+		{map[string]interface{}{}, `a`, 1, jsonptr.ErrSyntax, `a`},
+		{map[string]interface{}{}, `/~2/x`, 1, jsonptr.ErrSyntax, `/~2`},
+		{map[string]interface{}{"a": map[string]interface{}{}}, `/a/~2/x`, 1, jsonptr.ErrSyntax, `/a/~2`},
+		{map[string]interface{}{"a": map[string]interface{}{}}, `/a/~2`, 1, jsonptr.ErrSyntax, `/a/~2`},
+		{map[string]interface{}{}, `/a/x`, 1, jsonptr.ErrProperty, `/a`},
+		{map[string]interface{}{"a": 1}, `/a/x`, 1, nil, `/a`}, // DocumentError
+		{[]interface{}{}, `/x/y`, 1, jsonptr.ErrSyntax, `/x`},
+		{[]interface{}{[]interface{}{}}, `/0/x/y`, 1, jsonptr.ErrSyntax, `/0/x`},
+		{[]interface{}{}, `/0/y`, 1, jsonptr.ErrIndex, `/0`},
+		{[]interface{}{}, `/-/y`, 1, jsonptr.ErrIndex, `/-`},
+		{[]interface{}{1}, `/0/y`, 1, nil, `/0`}, // DocumentError
+		{map[string]json.RawMessage{}, `/~2/x`, 1, jsonptr.ErrSyntax, `/~2`},
+		{map[string]json.RawMessage{"a": json.RawMessage(`{}`)}, `/a/~2/x`, 1, jsonptr.ErrSyntax, `/a/~2`},
+		{[]json.RawMessage{}, `/x/y`, 1, jsonptr.ErrSyntax, `/x`},
+		{[]json.RawMessage{json.RawMessage(`[]`)}, `/0/x/y`, 1, jsonptr.ErrSyntax, `/0/x`},
+		{json.NewDecoder(strings.NewReader(`{`)), `/a`, 1, nil, ``},     // DocumentError
+		{json.NewDecoder(strings.NewReader(`[x]`)), `/0/a`, 1, nil, ``}, // DocumentError
+		// Errors with partially deserialized containers
+		{map[string]json.RawMessage{}, `/~2`, 1, jsonptr.ErrSyntax, `/~2`},
+		{map[string]json.RawMessage{}, `/a/b`, 1, jsonptr.ErrProperty, `/a`},
+		{map[string]json.RawMessage{"a": json.RawMessage(`{`)}, `/a/b`, 1, nil, `/a`}, // DocumentError
+		{map[string]json.RawMessage{"a": json.RawMessage(`[`)}, `/a/-`, 1, nil, `/a`}, // DocumentError
+		{map[string]json.RawMessage{"a": json.RawMessage(`x`)}, `/a/b`, 1, nil, `/a`}, // DocumentError
+		{map[string]json.RawMessage{"a": json.RawMessage(``)}, `/a/b`, 1, nil, `/a`},  // DocumentError
+		{[]json.RawMessage{}, `/x`, 1, jsonptr.ErrSyntax, `/x`},
+		{[]json.RawMessage{}, `/0/b`, 1, jsonptr.ErrIndex, `/0`},
+		{[]json.RawMessage{json.RawMessage(`1`)}, `/0/b`, 1, nil, `/0`}, // DocumentError
+	} {
+		doc := test.doc
+		err := jsonptr.Set(&doc, test.ptr, test.value)
+		if err == nil {
+			t.Errorf("%#v + %q: expected error", test.doc, test.ptr)
+			continue
+		}
+		var loc string
+		var docErr *jsonptr.DocumentError
+		var badErr *jsonptr.BadPointerError
+		var ptrErr *jsonptr.PtrError
+		if test.err == nil {
+			if !errors.As(err, &docErr) {
+				t.Errorf("%#v + %q: got %T %v, want *DocumentError", test.doc, test.ptr, err, err)
+				continue
+			}
+			loc = docErr.Ptr
+		} else {
+			if !errors.Is(err, test.err) {
+				t.Errorf("%#v + %q: got %T %v, want %v", test.doc, test.ptr, err, err, test.err)
+				continue
+			}
+			switch {
+			case errors.As(err, &badErr):
+				loc = badErr.BadPtr
+			case errors.As(err, &ptrErr):
+				loc = ptrErr.Ptr
+			}
+		}
+		if loc != test.loc {
+			t.Errorf("%#v + %q: error located at %q, want %q", test.doc, test.ptr, loc, test.loc)
+		}
+	}
 }
 
 func checkDelete(t *testing.T, data interface{}, ptr string, expectedValue interface{}, jsonOut string) {
@@ -289,28 +620,118 @@ func TestDelete(t *testing.T) {
 	checkDelete(t, []interface{}{1}, `/0`, 1, `[]`)
 	checkDelete(t, map[string]interface{}{"a": []interface{}{1, 2}}, `/a/0`, 1, `{"a":[2]}`)
 
-	// json.RawMessage in the tree, at root or nested
-	checkDelete(t, json.RawMessage(`{"a":1,"b":2}`), `/a`, float64(1), `{"b":2}`)
-	checkDelete(t, json.RawMessage(`[1,2,3]`), `/1`, float64(2), `[1,3]`)
-	checkDelete(t, map[string]interface{}{"a": json.RawMessage(`{"b":1,"c":2}`)}, `/a/b`, float64(1), `{"a":{"c":2}}`)
-	checkDelete(t, map[string]interface{}{"a": json.RawMessage(`[1,2,3]`)}, `/a/1`, float64(2), `{"a":[1,3]}`)
-	checkDelete(t, map[string]interface{}{"a": json.RawMessage(`{"b":{"c":[true]}}`)}, `/a/b/c/0`, true, `{"a":{"b":{"c":[]}}}`)
-	checkDelete(t, map[string]interface{}{"a": json.NewDecoder(strings.NewReader(`{"b":1,"c":2}`))}, `/a/b`, float64(1), `{"a":{"c":2}}`)
+	// json.RawMessage in the tree, at root or nested: the container is decoded
+	// lazily, so the deleted value is returned raw
+	checkDelete(t, json.RawMessage(`{"a":1,"b":2}`), `/a`, json.RawMessage(`1`), `{"b":2}`)
+	checkDelete(t, json.RawMessage(`[1,2,3]`), `/1`, json.RawMessage(`2`), `[1,3]`)
+	checkDelete(t, map[string]interface{}{"a": json.RawMessage(`{"b":1,"c":2}`)}, `/a/b`, json.RawMessage(`1`), `{"a":{"c":2}}`)
+	checkDelete(t, map[string]interface{}{"a": json.RawMessage(`[1,2,3]`)}, `/a/1`, json.RawMessage(`2`), `{"a":[1,3]}`)
+	checkDelete(t, map[string]interface{}{"a": json.RawMessage(`{"b":{"c":[true]}}`)}, `/a/b/c/0`, json.RawMessage(`true`), `{"a":{"b":{"c":[]}}}`)
+	checkDelete(t, map[string]interface{}{"a": json.NewDecoder(strings.NewReader(`{"b":1,"c":2}`))}, `/a/b`, json.RawMessage(`1`), `{"a":{"c":2}}`)
+
+	// Lazy decoding: the tree shape after a Delete through a raw document
+	doc := interface{}(json.RawMessage(`{"a":{"b":1,"c":2},"d":{"e":3}}`))
+	if _, err := jsonptr.Delete(&doc, `/a/b`); err != nil {
+		t.Errorf("unexpected error: %v", err)
+	} else if !reflect.DeepEqual(doc, map[string]interface{}{
+		"a": map[string]json.RawMessage{"c": json.RawMessage(`2`)},
+		"d": json.RawMessage(`{"e":3}`),
+	}) {
+		t.Errorf("got %#v", doc)
+	}
+
+	// Partially deserialized containers as direct parent: the raw value is
+	// returned and the container type is preserved
+	checkDelete(t, map[string]json.RawMessage{"a": json.RawMessage(`1`), "b": json.RawMessage(`2`)}, `/a`, json.RawMessage(`1`), `{"b":2}`)
+	checkDelete(t, map[string]json.RawMessage{"/": json.RawMessage(`1`), "b": json.RawMessage(`2`)}, `/~1`, json.RawMessage(`1`), `{"b":2}`)
+	checkDelete(t, []json.RawMessage{json.RawMessage(`1`), json.RawMessage(`2`), json.RawMessage(`3`)}, `/1`, json.RawMessage(`2`), `[1,3]`)
+	checkDelete(t, []json.RawMessage{json.RawMessage(`1`)}, `/0`, json.RawMessage(`1`), `[]`)
+	checkDelete(t, map[string]interface{}{"a": []json.RawMessage{json.RawMessage(`1`), json.RawMessage(`2`)}}, `/a/0`, json.RawMessage(`1`), `{"a":[2]}`)
+	checkDelete(t, []interface{}{map[string]json.RawMessage{"a": json.RawMessage(`1`)}}, `/0/a`, json.RawMessage(`1`), `[{}]`)
+	// Partially deserialized containers traversed on the path
+	checkDelete(t, map[string]json.RawMessage{"a": json.RawMessage(`[1,2]`), "b": json.RawMessage(`{}`)}, `/a/0`, json.RawMessage(`1`), `{"a":[2],"b":{}}`)
+	checkDelete(t, map[string]json.RawMessage{"a": json.RawMessage(`{"b":1,"c":2}`)}, `/a/b`, json.RawMessage(`1`), `{"a":{"c":2}}`)
+	checkDelete(t, []json.RawMessage{json.RawMessage(`[1,2]`), json.RawMessage(`{}`)}, `/0/1`, json.RawMessage(`2`), `[[1],{}]`)
+	checkDelete(t, []json.RawMessage{json.RawMessage(`{"a":[true]}`)}, `/0/a/0`, json.RawMessage(`true`), `[{"a":[]}]`)
+
+	doc = interface{}([]json.RawMessage{json.RawMessage(`1`), json.RawMessage(`2`)})
+	if _, err := jsonptr.Delete(&doc, `/0`); err != nil {
+		t.Errorf("unexpected error: %v", err)
+	} else if !reflect.DeepEqual(doc, []json.RawMessage{json.RawMessage(`2`)}) {
+		t.Errorf("got %#v", doc)
+	}
+
+	// On error, a JSONDecoder on the path that has been read is replaced in
+	// the tree by the raw value read, so the document stays usable
+	for _, test := range []struct {
+		doc      interface{}
+		ptr      string
+		expected interface{} // document after the failed Delete
+		get      string      // a pointer through the decoder, that must still resolve
+	}{
+		{
+			map[string]interface{}{"a": json.NewDecoder(strings.NewReader(`{"b":1} "next"`))}, `/a/x/y`,
+			map[string]interface{}{"a": json.RawMessage(`{"b":1}`)}, `/a/b`,
+		},
+		{
+			[]interface{}{json.NewDecoder(strings.NewReader(`[1] "next"`))}, `/0/5`,
+			[]interface{}{json.RawMessage(`[1]`)}, `/0/0`,
+		},
+		{
+			map[string]interface{}{"a": json.NewDecoder(strings.NewReader(`{"b":{"c":1},"d":2}`))}, `/a/b/c/x`,
+			map[string]interface{}{"a": json.RawMessage(`{"b":{"c":1},"d":2}`)}, `/a/b/c`,
+		},
+		{
+			json.NewDecoder(strings.NewReader(`{"b":1}`)), `/x`,
+			json.RawMessage(`{"b":1}`), `/b`,
+		},
+	} {
+		t.Logf("failed Delete through a JSONDecoder: %q", test.ptr)
+		doc := test.doc
+		if _, err := jsonptr.Delete(&doc, test.ptr); err == nil {
+			t.Errorf("  expected error")
+		} else if !reflect.DeepEqual(doc, test.expected) {
+			t.Errorf("  got  %#v\n  want %#v", doc, test.expected)
+		}
+		if _, err := jsonptr.Get(doc, test.get); err != nil {
+			t.Errorf("  Get %q after failed Delete: unexpected error: %v", test.get, err)
+		}
+	}
 
 	// Errors
 	for _, test := range []struct {
 		doc interface{}
 		ptr string
 		err error
+		loc string // location reported in the error (not checked if empty)
 	}{
-		{map[string]interface{}{}, ``, jsonptr.ErrDeleteRoot},
-		{map[string]interface{}{}, `a`, jsonptr.ErrSyntax},
-		{map[string]interface{}{}, `/a`, jsonptr.ErrProperty},
-		{map[string]interface{}{"a": 1}, `/a/b`, nil}, // DocumentError
-		{[]interface{}{1}, `/1`, jsonptr.ErrIndex},
-		{[]interface{}{1}, `/-`, jsonptr.ErrIndex},
-		{[]interface{}{1}, `/x`, jsonptr.ErrSyntax},
-		{map[string]interface{}{"a": json.RawMessage(`{`)}, `/a/b`, nil}, // DocumentError
+		{map[string]interface{}{}, ``, jsonptr.ErrDeleteRoot, ``},
+		{map[string]interface{}{}, `a`, jsonptr.ErrSyntax, `a`},
+		{map[string]interface{}{}, `/a`, jsonptr.ErrProperty, `/a`},
+		{map[string]interface{}{}, `/a/b`, jsonptr.ErrProperty, `/a`},
+		{map[string]interface{}{"a": map[string]interface{}{}}, `/a/b/c`, jsonptr.ErrProperty, `/a/b`},
+		{map[string]interface{}{"a": map[string]interface{}{}}, `/a/~2/c`, jsonptr.ErrSyntax, `/a/~2`},
+		{map[string]interface{}{"a": 1}, `/a/b`, nil, `/a`}, // DocumentError
+		{[]interface{}{1}, `/1`, jsonptr.ErrIndex, `/1`},
+		{[]interface{}{1}, `/-`, jsonptr.ErrIndex, `/-`},
+		{[]interface{}{1}, `/1/x`, jsonptr.ErrIndex, `/1`},
+		{[]interface{}{1}, `/-/x`, jsonptr.ErrIndex, `/-`},
+		{[]interface{}{1}, `/x`, jsonptr.ErrSyntax, `/x`},
+		{[]interface{}{[]interface{}{}}, `/0/x/y`, jsonptr.ErrSyntax, `/0/x`},
+		{map[string]interface{}{"a": json.RawMessage(`{`)}, `/a/b`, nil, `/a`}, // DocumentError
+		{json.RawMessage(`{`), `/a`, nil, ``},                                  // DocumentError
+		{json.NewDecoder(strings.NewReader(`[x]`)), `/0/a`, nil, ``},           // DocumentError
+		{map[string]json.RawMessage{}, `/a`, jsonptr.ErrProperty, `/a`},
+		{map[string]json.RawMessage{}, `/~2`, jsonptr.ErrSyntax, `/~2`},
+		{map[string]json.RawMessage{}, `/a/b`, jsonptr.ErrProperty, `/a`},
+		{map[string]json.RawMessage{"a": json.RawMessage(`{}`)}, `/a/~2/c`, jsonptr.ErrSyntax, `/a/~2`},
+		{map[string]json.RawMessage{"a": json.RawMessage(`{`)}, `/a/b`, nil, `/a`}, // DocumentError
+		{[]json.RawMessage{json.RawMessage(`1`)}, `/1`, jsonptr.ErrIndex, `/1`},
+		{[]json.RawMessage{json.RawMessage(`1`)}, `/-`, jsonptr.ErrIndex, `/-`},
+		{[]json.RawMessage{json.RawMessage(`1`)}, `/x`, jsonptr.ErrSyntax, `/x`},
+		{[]json.RawMessage{json.RawMessage(`1`)}, `/1/x`, jsonptr.ErrIndex, `/1`},
+		{[]json.RawMessage{json.RawMessage(`[]`)}, `/0/x/y`, jsonptr.ErrSyntax, `/0/x`},
+		{[]json.RawMessage{json.RawMessage(`1`)}, `/0/x`, nil, `/0`}, // DocumentError
 	} {
 		doc := test.doc
 		_, err := jsonptr.Delete(&doc, test.ptr)
@@ -318,13 +739,40 @@ func TestDelete(t *testing.T) {
 			t.Errorf("%#v - %q: expected error", test.doc, test.ptr)
 			continue
 		}
+		var loc string
+		var docErr *jsonptr.DocumentError
+		var badErr *jsonptr.BadPointerError
+		var ptrErr *jsonptr.PtrError
 		if test.err == nil {
-			var docErr *jsonptr.DocumentError
 			if !errors.As(err, &docErr) {
 				t.Errorf("%#v - %q: got %T %v, want *DocumentError", test.doc, test.ptr, err, err)
+				continue
 			}
-		} else if !errors.Is(err, test.err) {
-			t.Errorf("%#v - %q: got %T %v, want %v", test.doc, test.ptr, err, err, test.err)
+			loc = docErr.Ptr
+		} else {
+			if !errors.Is(err, test.err) {
+				t.Errorf("%#v - %q: got %T %v, want %v", test.doc, test.ptr, err, err, test.err)
+				continue
+			}
+			// ErrSyntax and ErrDeleteRoot are reported by a BadPointerError,
+			// ErrProperty and ErrIndex by a PtrError
+			switch {
+			case errors.As(err, &badErr):
+				if test.err != jsonptr.ErrSyntax && test.err != jsonptr.ErrDeleteRoot {
+					t.Errorf("%#v - %q: got %T %v, want *PtrError", test.doc, test.ptr, err, err)
+					continue
+				}
+				loc = badErr.BadPtr
+			case errors.As(err, &ptrErr):
+				if test.err != jsonptr.ErrProperty && test.err != jsonptr.ErrIndex {
+					t.Errorf("%#v - %q: got %T %v, want *BadPointerError", test.doc, test.ptr, err, err)
+					continue
+				}
+				loc = ptrErr.Ptr
+			}
+		}
+		if loc != test.loc {
+			t.Errorf("%#v - %q: error located at %q, want %q", test.doc, test.ptr, loc, test.loc)
 		}
 	}
 }
