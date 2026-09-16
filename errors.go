@@ -90,13 +90,19 @@ func propertyError(ptr string) *PtrError {
 
 // DocumentError signals a document that can't be processed by this library
 type DocumentError struct {
+	// Ptr is the substring of the original pointer where the error occurred.
+	// It is empty when the location is not known or not relevant (JSON syntax
+	// errors for example).
 	Ptr string
 	Err error
 }
 
 // Error implements the 'error' interface.
 func (e *DocumentError) Error() string {
-	return e.Err.Error()
+	if e.Ptr == "" {
+		return e.Err.Error()
+	}
+	return strconv.Quote(e.Ptr) + ": " + e.Err.Error()
 }
 
 // Unwrap allows to unwrap the error (see [errors.Unwrap]).
@@ -110,8 +116,11 @@ func (e *DocumentError) rebase(base string) {
 	}
 }
 
+// docError reports that doc, found at ptr, can't be traversed.
+// The message is composed by [DocumentError.Error] from the Ptr field, so
+// the error can be rebased.
 func docError(ptr string, doc interface{}) *DocumentError {
-	return &DocumentError{ptr, fmt.Errorf("%q: not an object or array but %T", ptr, doc)}
+	return &DocumentError{ptr, fmt.Errorf("not an object or array but %T", doc)}
 }
 
 func jsonError(ptr string, err error) *DocumentError {
