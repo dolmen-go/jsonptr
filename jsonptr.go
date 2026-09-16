@@ -124,7 +124,7 @@ func getJSON(decoder JSONDecoder, ptr string) (interface{}, ptrError) {
 		case '[':
 			n, err := arrayIndex(cur)
 			if err != nil {
-				return nil, &BadPointerError{ptr[:p], err}
+				return nil, badIndexError(ptr[:p], cur)
 			}
 			if n < 0 {
 				return nil, indexError(ptr[:p])
@@ -237,7 +237,7 @@ func Get(doc interface{}, ptr string) (interface{}, error) {
 		case []interface{}:
 			n, err := arrayIndex(cur[:q])
 			if err != nil {
-				return nil, &BadPointerError{ptr[:p], err}
+				return nil, badIndexError(ptr[:p], cur[:q])
 			}
 			if n < 0 || n >= len(here) {
 				return nil, indexError(ptr[:p])
@@ -255,7 +255,7 @@ func Get(doc interface{}, ptr string) (interface{}, error) {
 		case []json.RawMessage:
 			n, err := arrayIndex(cur[:q])
 			if err != nil {
-				return nil, &BadPointerError{ptr[:p], err}
+				return nil, badIndexError(ptr[:p], cur[:q])
 			}
 			if n < 0 || n >= len(here) {
 				return nil, indexError(ptr[:p])
@@ -263,18 +263,21 @@ func Get(doc interface{}, ptr string) (interface{}, error) {
 			doc = here[n]
 		case JSONDecoder:
 			v, err := getJSON(here, ptr[p-q-1:])
-			if perr, ok := err.(*PtrError); ok {
-				perr.Ptr = ptr[:p-q-1+len(perr.Ptr)]
+			if err != nil {
+				err.rebase(ptr[:p-q-1])
+				return nil, err
 			}
-			return v, err
+			return v, nil
 		case json.RawMessage:
 			v, err := getRaw(here, ptr[p-q-1:])
-			if perr, ok := err.(*PtrError); ok {
-				perr.Ptr = ptr[:p-q-1+len(perr.Ptr)]
+			if err != nil {
+				err.rebase(ptr[:p-q-1])
+				return nil, err
 			}
-			return v, err
+			return v, nil
 		default:
-			return nil, docError(ptr[:p], doc)
+			// Report the location of the value which can't be traversed
+			return nil, docError(ptr[:p-q-1], doc)
 		}
 		if p >= len(ptr) {
 			break
@@ -454,7 +457,7 @@ func set(doc *interface{}, ptr string, value interface{}) ptrError {
 	case []interface{}:
 		n, err := arrayIndex(prop)
 		if err != nil {
-			return &BadPointerError{curPtr, err}
+			return badIndexError(curPtr, prop)
 		}
 		var tmp interface{}
 		if n >= 0 && n < len(parent) {
@@ -483,7 +486,7 @@ func set(doc *interface{}, ptr string, value interface{}) ptrError {
 	case []json.RawMessage:
 		n, err := arrayIndex(prop)
 		if err != nil {
-			return &BadPointerError{curPtr, err}
+			return badIndexError(curPtr, prop)
 		}
 		var tmp interface{}
 		if n >= 0 && n < len(parent) {
@@ -645,7 +648,7 @@ func del(doc *interface{}, ptr string) (interface{}, ptrError) {
 	case []interface{}:
 		n, err := arrayIndex(prop)
 		if err != nil {
-			return nil, &BadPointerError{curPtr, err}
+			return nil, badIndexError(curPtr, prop)
 		}
 		if n < 0 || n >= len(parent) {
 			return nil, indexError(curPtr)
@@ -672,7 +675,7 @@ func del(doc *interface{}, ptr string) (interface{}, ptrError) {
 	case []json.RawMessage:
 		n, err := arrayIndex(prop)
 		if err != nil {
-			return nil, &BadPointerError{curPtr, err}
+			return nil, badIndexError(curPtr, prop)
 		}
 		if n < 0 || n >= len(parent) {
 			return nil, indexError(curPtr)

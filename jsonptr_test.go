@@ -74,9 +74,12 @@ func (tester *getTester) checkGet(jsonData string, ptr string, expected interfac
 	}
 }
 
-// checkGetError checks that tester.Get fails with a PtrError wrapping
+// checkGetError checks that tester.Get fails with an error wrapping
 // expectedErr located at expectedPtr, for the same document given in all the
 // forms returned by docForms.
+//
+// The type of the error is expected from expectedErr: a BadPointerError for
+// ErrSyntax, a DocumentError for nil, a PtrError otherwise.
 func (tester *getTester) checkGetError(jsonData string, ptr string, expectedErr error, expectedPtr string) {
 	t := tester.t
 	t.Logf("%v => \"%v\" (error expected)", jsonData, ptr)
@@ -87,17 +90,36 @@ func (tester *getTester) checkGetError(jsonData string, ptr string, expectedErr 
 			t.Errorf("  %T: unexpected success: got %T %v", doc, got, got)
 			continue
 		}
-		if !errors.Is(err, expectedErr) {
+		if expectedErr != nil && !errors.Is(err, expectedErr) {
 			t.Errorf("  %T: got %T %q, want %q", doc, err, err, expectedErr)
 			continue
 		}
-		var perr *jsonptr.PtrError
-		if !errors.As(err, &perr) {
-			t.Errorf("  %T: got %T %q, want *PtrError", doc, err, err)
-			continue
+		var loc string
+		var badErr *jsonptr.BadPointerError
+		var docErr *jsonptr.DocumentError
+		var ptrErr *jsonptr.PtrError
+		switch {
+		case expectedErr == nil:
+			if !errors.As(err, &docErr) {
+				t.Errorf("  %T: got %T %q, want *DocumentError", doc, err, err)
+				continue
+			}
+			loc = docErr.Ptr
+		case expectedErr == jsonptr.ErrSyntax:
+			if !errors.As(err, &badErr) {
+				t.Errorf("  %T: got %T %q, want *BadPointerError", doc, err, err)
+				continue
+			}
+			loc = badErr.BadPtr
+		default:
+			if !errors.As(err, &ptrErr) {
+				t.Errorf("  %T: got %T %q, want *PtrError", doc, err, err)
+				continue
+			}
+			loc = ptrErr.Ptr
 		}
-		if perr.Ptr != expectedPtr {
-			t.Errorf("  %T: error located at %q, want %q", doc, perr.Ptr, expectedPtr)
+		if loc != expectedPtr {
+			t.Errorf("  %T: error located at %q, want %q", doc, loc, expectedPtr)
 		}
 	}
 }
@@ -162,6 +184,33 @@ func (tester *getTester) runTest() {
 	tester.checkGetError(`[1,2]`, `/-`, jsonptr.ErrIndex, `/-`)
 	tester.checkGetError(`{"a":[[1],[2]]}`, `/a/1/1`, jsonptr.ErrIndex, `/a/1/1`)
 	tester.checkGetError(`{"a":[[1],[2]]}`, `/a/2/0`, jsonptr.ErrIndex, `/a/2`)
+	// Not an index: a navigation error, like a missing property
+	tester.checkGetError(`[1]`, `/x`, jsonptr.ErrIndex, `/x`)
+	tester.checkGetError(`[1]`, `/`, jsonptr.ErrIndex, `/`)
+	tester.checkGetError(`[1]`, `/01`, jsonptr.ErrIndex, `/01`)
+	tester.checkGetError(`[1]`, `/-1`, jsonptr.ErrIndex, `/-1`)
+	tester.checkGetError(`[1]`, `/1e0`, jsonptr.ErrIndex, `/1e0`)
+	tester.checkGetError(`[1]`, `/99999999999999999999`, jsonptr.ErrIndex, `/99999999999999999999`)
+	tester.checkGetError(`{"a":[1]}`, `/a/x/y`, jsonptr.ErrIndex, `/a/x`)
+	tester.checkGetError(`{"a":[[1]]}`, `/a/0/x`, jsonptr.ErrIndex, `/a/0/x`)
+	// But a bad escape is a syntax error, whatever the container
+	tester.checkGetError(`[1]`, `/~2`, jsonptr.ErrSyntax, `/~2`)
+	tester.checkGetError(`{"a":[1]}`, `/a/~/x`, jsonptr.ErrSyntax, `/a/~`)
+	// Invalid escape: the error is located at the bad token
+	tester.checkGetError(`{"a":{"b":1}}`, `/a/~2`, jsonptr.ErrSyntax, `/a/~2`)
+	tester.checkGetError(`{"a":{"b":1}}`, `/a/~2/x`, jsonptr.ErrSyntax, `/a/~2`)
+	tester.checkGetError(`{"a":{"b":{"c":1}}}`, `/a/b/~/x`, jsonptr.ErrSyntax, `/a/b/~`)
+	// Not an object or array: the error is located at the value which can't
+	// be traversed
+	tester.checkGetError(`1`, `/x`, nil, ``)
+	tester.checkGetError(`"str"`, `/0/x`, nil, ``)
+	tester.checkGetError(`{"s":1}`, `/s/x`, nil, `/s`)
+	tester.checkGetError(`{"a":{"s":1}}`, `/a/s/x`, nil, `/a/s`)
+	tester.checkGetError(`{"a":{"s":1}}`, `/a/s/x/y`, nil, `/a/s`)
+	tester.checkGetError(`{"a":null}`, `/a/x`, nil, `/a`)
+	tester.checkGetError(`{"a":[1]}`, `/a/0/x`, nil, `/a/0`)
+	tester.checkGetError(`[{"s":"str"}]`, `/0/s/0`, nil, `/0/s`)
+	tester.checkGetError(`{"a":[{"s":true}]}`, `/a/0/s/0`, nil, `/a/0/s`)
 
 	// Partially deserialized containers mixed at various levels
 	mixed := map[string]interface{}{
@@ -537,15 +586,17 @@ func TestSet(t *testing.T) {
 		{map[string]interface{}{"a": map[string]interface{}{}}, `/a/~2`, 1, jsonptr.ErrSyntax, `/a/~2`},
 		{map[string]interface{}{}, `/a/x`, 1, jsonptr.ErrProperty, `/a`},
 		{map[string]interface{}{"a": 1}, `/a/x`, 1, nil, `/a`}, // DocumentError
-		{[]interface{}{}, `/x/y`, 1, jsonptr.ErrSyntax, `/x`},
-		{[]interface{}{[]interface{}{}}, `/0/x/y`, 1, jsonptr.ErrSyntax, `/0/x`},
+		{[]interface{}{}, `/x/y`, 1, jsonptr.ErrIndex, `/x`},
+		{[]interface{}{[]interface{}{}}, `/0/x/y`, 1, jsonptr.ErrIndex, `/0/x`},
+		{[]interface{}{[]interface{}{}}, `/0/~2/y`, 1, jsonptr.ErrSyntax, `/0/~2`},
+		{[]interface{}{}, `/~`, 1, jsonptr.ErrSyntax, `/~`},
 		{[]interface{}{}, `/0/y`, 1, jsonptr.ErrIndex, `/0`},
 		{[]interface{}{}, `/-/y`, 1, jsonptr.ErrIndex, `/-`},
 		{[]interface{}{1}, `/0/y`, 1, nil, `/0`}, // DocumentError
 		{map[string]json.RawMessage{}, `/~2/x`, 1, jsonptr.ErrSyntax, `/~2`},
 		{map[string]json.RawMessage{"a": json.RawMessage(`{}`)}, `/a/~2/x`, 1, jsonptr.ErrSyntax, `/a/~2`},
-		{[]json.RawMessage{}, `/x/y`, 1, jsonptr.ErrSyntax, `/x`},
-		{[]json.RawMessage{json.RawMessage(`[]`)}, `/0/x/y`, 1, jsonptr.ErrSyntax, `/0/x`},
+		{[]json.RawMessage{}, `/x/y`, 1, jsonptr.ErrIndex, `/x`},
+		{[]json.RawMessage{json.RawMessage(`[]`)}, `/0/x/y`, 1, jsonptr.ErrIndex, `/0/x`},
 		{json.NewDecoder(strings.NewReader(`{`)), `/a`, 1, nil, ``},     // DocumentError
 		{json.NewDecoder(strings.NewReader(`[x]`)), `/0/a`, 1, nil, ``}, // DocumentError
 		// Errors with partially deserialized containers
@@ -555,7 +606,7 @@ func TestSet(t *testing.T) {
 		{map[string]json.RawMessage{"a": json.RawMessage(`[`)}, `/a/-`, 1, nil, `/a`}, // DocumentError
 		{map[string]json.RawMessage{"a": json.RawMessage(`x`)}, `/a/b`, 1, nil, `/a`}, // DocumentError
 		{map[string]json.RawMessage{"a": json.RawMessage(``)}, `/a/b`, 1, nil, `/a`},  // DocumentError
-		{[]json.RawMessage{}, `/x`, 1, jsonptr.ErrSyntax, `/x`},
+		{[]json.RawMessage{}, `/x`, 1, jsonptr.ErrIndex, `/x`},
 		{[]json.RawMessage{}, `/0/b`, 1, jsonptr.ErrIndex, `/0`},
 		{[]json.RawMessage{json.RawMessage(`1`)}, `/0/b`, 1, nil, `/0`}, // DocumentError
 	} {
@@ -716,8 +767,10 @@ func TestDelete(t *testing.T) {
 		{[]interface{}{1}, `/-`, jsonptr.ErrIndex, `/-`},
 		{[]interface{}{1}, `/1/x`, jsonptr.ErrIndex, `/1`},
 		{[]interface{}{1}, `/-/x`, jsonptr.ErrIndex, `/-`},
-		{[]interface{}{1}, `/x`, jsonptr.ErrSyntax, `/x`},
-		{[]interface{}{[]interface{}{}}, `/0/x/y`, jsonptr.ErrSyntax, `/0/x`},
+		{[]interface{}{1}, `/x`, jsonptr.ErrIndex, `/x`},
+		{[]interface{}{[]interface{}{}}, `/0/x/y`, jsonptr.ErrIndex, `/0/x`},
+		{[]interface{}{[]interface{}{}}, `/0/~2/y`, jsonptr.ErrSyntax, `/0/~2`},
+		{[]interface{}{1}, `/~`, jsonptr.ErrSyntax, `/~`},
 		{map[string]interface{}{"a": json.RawMessage(`{`)}, `/a/b`, nil, `/a`}, // DocumentError
 		{json.RawMessage(`{`), `/a`, nil, ``},                                  // DocumentError
 		{json.NewDecoder(strings.NewReader(`[x]`)), `/0/a`, nil, ``},           // DocumentError
@@ -728,9 +781,9 @@ func TestDelete(t *testing.T) {
 		{map[string]json.RawMessage{"a": json.RawMessage(`{`)}, `/a/b`, nil, `/a`}, // DocumentError
 		{[]json.RawMessage{json.RawMessage(`1`)}, `/1`, jsonptr.ErrIndex, `/1`},
 		{[]json.RawMessage{json.RawMessage(`1`)}, `/-`, jsonptr.ErrIndex, `/-`},
-		{[]json.RawMessage{json.RawMessage(`1`)}, `/x`, jsonptr.ErrSyntax, `/x`},
+		{[]json.RawMessage{json.RawMessage(`1`)}, `/x`, jsonptr.ErrIndex, `/x`},
 		{[]json.RawMessage{json.RawMessage(`1`)}, `/1/x`, jsonptr.ErrIndex, `/1`},
-		{[]json.RawMessage{json.RawMessage(`[]`)}, `/0/x/y`, jsonptr.ErrSyntax, `/0/x`},
+		{[]json.RawMessage{json.RawMessage(`[]`)}, `/0/x/y`, jsonptr.ErrIndex, `/0/x`},
 		{[]json.RawMessage{json.RawMessage(`1`)}, `/0/x`, nil, `/0`}, // DocumentError
 	} {
 		doc := test.doc
