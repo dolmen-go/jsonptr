@@ -25,10 +25,7 @@ type getTester struct {
 // fully deserialized, raw, streamed, and partially deserialized
 // (map[string]json.RawMessage or []json.RawMessage) when the document is an
 // object or an array.
-//
-// The partially deserialized forms are omitted for the root pointer as Get
-// would return them as-is, which is not comparable with the expected value.
-func docForms(t *testing.T, jsonData string, ptr string) []interface{} {
+func docForms(t *testing.T, jsonData string) []interface{} {
 	var data interface{}
 	if err := json.Unmarshal([]byte(jsonData), &data); err != nil {
 		t.Fatalf("Can't unmarshal %v: %s\n", jsonData, err)
@@ -37,9 +34,6 @@ func docForms(t *testing.T, jsonData string, ptr string) []interface{} {
 		data,
 		json.RawMessage(jsonData),
 		json.NewDecoder(strings.NewReader(jsonData)),
-	}
-	if ptr == "" {
-		return docs
 	}
 	switch data.(type) {
 	case map[string]interface{}:
@@ -62,7 +56,7 @@ func (tester *getTester) checkGet(jsonData string, ptr string, expected interfac
 	t := tester.t
 	t.Logf("%v => \"%v\"", jsonData, ptr)
 
-	for _, doc := range docForms(t, jsonData, ptr) {
+	for _, doc := range docForms(t, jsonData) {
 		got, err := tester.Get(doc, ptr)
 		if err != nil {
 			t.Errorf("  %T: unexpected error: %s", doc, err)
@@ -84,7 +78,7 @@ func (tester *getTester) checkGetError(jsonData string, ptr string, expectedErr 
 	t := tester.t
 	t.Logf("%v => \"%v\" (error expected)", jsonData, ptr)
 
-	for _, doc := range docForms(t, jsonData, ptr) {
+	for _, doc := range docForms(t, jsonData) {
 		got, err := tester.Get(doc, ptr)
 		if err == nil {
 			t.Errorf("  %T: unexpected success: got %T %v", doc, got, got)
@@ -150,6 +144,36 @@ func (tester *getTester) runTest() {
 
 	tester.checkGet(`"x"`, ``, "x")
 	tester.checkGet(`["x"]`, ``, []interface{}{"x"})
+	// Nested containers at root: the partially deserialized forms are fully expanded
+	tester.checkGet(`{"a":[1,{"b":null}],"c":{}}`, ``, map[string]interface{}{
+		"a": []interface{}{float64(1), map[string]interface{}{"b": nil}},
+		"c": map[string]interface{}{},
+	})
+	tester.checkGet(`[[],{"a":[true]}]`, ``, []interface{}{
+		[]interface{}{},
+		map[string]interface{}{"a": []interface{}{true}},
+	})
+	tester.checkGet(`{"a":{"b":[[1]]}}`, `/a`, map[string]interface{}{"b": []interface{}{[]interface{}{float64(1)}}})
+	// Nil partially deserialized containers are expanded as nil containers
+	// Note that a nil partially deserialized container is not something that is expected in input.
+	// It it handled in getLeaf only for completeness.
+	for _, test := range []struct {
+		doc      interface{}
+		ptr      string
+		expected interface{}
+	}{
+		{[]json.RawMessage(nil), ``, []interface{}(nil)},
+		{map[string]json.RawMessage(nil), ``, map[string]interface{}(nil)},
+		{map[string]interface{}{"a": []json.RawMessage(nil)}, `/a`, []interface{}(nil)},
+		{[]interface{}{map[string]json.RawMessage(nil)}, `/0`, map[string]interface{}(nil)},
+	} {
+		got, err := tester.Get(test.doc, test.ptr)
+		if err != nil {
+			t.Errorf("%#v => %q: unexpected error: %v", test.doc, test.ptr, err)
+		} else if !reflect.DeepEqual(got, test.expected) {
+			t.Errorf("%#v => %q: got %#v, want %#v", test.doc, test.ptr, got, test.expected)
+		}
+	}
 	tester.checkGet(`["a","b"]`, `/0`, "a")
 	tester.checkGet(`["a","b"]`, `/1`, "b")
 	tester.checkGet(`{"a":"x"}`, `/a`, "x")
@@ -236,10 +260,13 @@ func (tester *getTester) runTest() {
 		{`/c/~0`, nil},
 		{`/e/0/f/g`, float64(3)},
 		{`/e/0/f`, map[string]interface{}{"g": float64(3)}},
-		// Partially deserialized containers are returned as-is when they are the leaf
-		{`/a`, mixed["a"]},
-		{`/c`, mixed["c"]},
-		{`/e/0`, mixed["e"].([]interface{})[0]},
+		// Partially deserialized containers are returned expanded when they are the leaf
+		{`/a`, []interface{}{
+			map[string]interface{}{"b": []interface{}{float64(1), float64(2)}},
+			"x",
+		}},
+		{`/c`, map[string]interface{}{"d": []interface{}{true}, "~": nil}},
+		{`/e/0`, map[string]interface{}{"f": map[string]interface{}{"g": float64(3)}}},
 	} {
 		t.Logf("mixed => %q", test.ptr)
 		got, err := tester.Get(mixed, test.ptr)
@@ -272,6 +299,38 @@ func (tester *getTester) runTest() {
 		}
 		if perr.Ptr != test.loc {
 			t.Errorf("  error located at %q, want %q", perr.Ptr, test.loc)
+		}
+	}
+
+	// Invalid JSON inside a partially deserialized container returned as the
+	// leaf: the error is located at the invalid member
+	for _, test := range []struct {
+		doc interface{}
+		ptr string
+		loc string
+	}{
+		{[]json.RawMessage{json.RawMessage(`{`)}, ``, `/0`},
+		{[]json.RawMessage{json.RawMessage(`1`), json.RawMessage(`[`)}, ``, `/1`},
+		{map[string]json.RawMessage{"a": json.RawMessage(`x`)}, ``, `/a`},
+		{map[string]json.RawMessage{"a/b~": json.RawMessage(``)}, ``, `/a~1b~0`},
+		// Nested: the location is relative to the document
+		{map[string]interface{}{"a": []json.RawMessage{json.RawMessage(`{`)}}, `/a`, `/a/0`},
+		{[]json.RawMessage{json.RawMessage(`[{"b":1},[`)}, ``, `/0`},
+		{[]interface{}{map[string]json.RawMessage{"b": json.RawMessage(`[1,`)}}, `/0`, `/0/b`},
+	} {
+		t.Logf("invalid member: %#v => %q", test.doc, test.ptr)
+		_, err := tester.Get(test.doc, test.ptr)
+		var docErr *jsonptr.DocumentError
+		if !errors.As(err, &docErr) {
+			t.Errorf("  got %T %v, want *DocumentError", err, err)
+			continue
+		}
+		if docErr.Ptr != test.loc {
+			t.Errorf("  error located at %q, want %q", docErr.Ptr, test.loc)
+		}
+		var synErr *json.SyntaxError
+		if !errors.As(err, &synErr) {
+			t.Errorf("  got %T %v, want a wrapped *json.SyntaxError", err, err)
 		}
 	}
 }
