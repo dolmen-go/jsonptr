@@ -4,7 +4,8 @@
 
 // Package jsonptr implements JSON Pointer (RFC 6901) lookup. Fast, with strong testsuite.
 //
-// Any part of a data tree made of []interface{} or map[string]interface{}
+// Any part of a data tree made of []interface{}, map[string]interface{},
+// [encoding/json.RawMessage], []json.RawMessage, map[string]json.RawMessage
 // may be dereferenced with a JSON Pointer.
 //
 // Specification: https://tools.ietf.org/html/rfc6901
@@ -188,6 +189,38 @@ func getLeaf(doc interface{}) (interface{}, ptrError) {
 	case JSONDecoder:
 		doc = nil
 		err = raw.Decode(&doc)
+	case []json.RawMessage:
+		// The nil case is not expected, but still handled for completeness
+		if raw == nil {
+			doc = []interface{}(nil)
+		} else {
+			arr := make([]interface{}, len(raw))
+			for i, v := range raw {
+				var perr ptrError
+				arr[i], perr = getLeaf(v)
+				if perr != nil {
+					perr.rebase(fmt.Sprintf("/%d", i))
+					return nil, perr
+				}
+			}
+			doc = arr
+		}
+	case map[string]json.RawMessage:
+		// The nil case is not expected, but still handled for completeness
+		if raw == nil {
+			doc = map[string]interface{}(nil)
+		} else {
+			m := make(map[string]interface{}, len(raw))
+			for k, v := range raw {
+				var perr ptrError
+				m[k], perr = getLeaf(v)
+				if perr != nil {
+					perr.rebase("/" + EscapeString(k))
+					return nil, perr
+				}
+			}
+			doc = m
+		}
 	default:
 		return doc, nil
 	}
