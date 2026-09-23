@@ -1,6 +1,6 @@
 # jsonptr - JSON Pointer ([RFC 6901](https://tools.ietf.org/html/rfc6901)) for Go
 
-[![GoDoc](https://img.shields.io/badge/godoc-reference-blue.svg)](https://godoc.org/github.com/dolmen-go/jsonptr)
+[![Go Reference](https://pkg.go.dev/badge/github.com/dolmen-go/jsonptr.svg)](https://pkg.go.dev/github.com/dolmen-go/jsonptr)
 [![codecov](https://codecov.io/gh/dolmen-go/jsonptr/branch/master/graph/badge.svg?token=tdH8IAOTo7)](https://codecov.io/gh/dolmen-go/jsonptr)
 [![Go Report Card](https://goreportcard.com/badge/github.com/dolmen-go/jsonptr)](https://goreportcard.com/report/github.com/dolmen-go/jsonptr)
 
@@ -12,8 +12,8 @@ Goals:
     * Idiomatic
     * Short
     * Complete
-    * Structured errors, not just strings: [`BadPointerError`](https://godoc.org/github.com/dolmen-go/jsonptr#BadPointerError), [`PtrError`](https://godoc.org/github.com/dolmen-go/jsonptr#PtrError), [`DocumentError`](https://godoc.org/github.com/dolmen-go/jsonptr#DocumentError)
-    * Working at JSON data model level (tree of `[]interface{}`, `map[string]interface{}`) as well as serialized JSON ([`json.RawMessage`](https://golang.org/pkg/encoding/json/#RawMessage), [`json.Decoder`](https://golang.org/pkg/encoding/json/#Decoder))
+    * Structured errors, not just strings: [`BadPointerError`](https://pkg.go.dev/github.com/dolmen-go/jsonptr#BadPointerError), [`PtrError`](https://pkg.go.dev/github.com/dolmen-go/jsonptr#PtrError), [`DocumentError`](https://pkg.go.dev/github.com/dolmen-go/jsonptr#DocumentError)
+    * Working at JSON data model level (tree of `[]interface{}`, `map[string]interface{}`) as well as serialized JSON ([`json.RawMessage`](https://pkg.go.dev/encoding/json#RawMessage), [`json.Decoder`](https://pkg.go.dev/encoding/json#Decoder))
 2. Correctness (most existing open source Go implementations have limitations in their interface or have implementation bugs)
     * Full testsuite (work in progress)
     * Reject invalid escapes (regexp `/~[^01]/`)
