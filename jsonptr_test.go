@@ -26,6 +26,8 @@ type getTester struct {
 // (map[string]json.RawMessage or []json.RawMessage) when the document is an
 // object or an array.
 func docForms(t *testing.T, jsonData string) []interface{} {
+	t.Helper()
+
 	var data interface{}
 	if err := json.Unmarshal([]byte(jsonData), &data); err != nil {
 		t.Fatalf("Can't unmarshal %v: %s\n", jsonData, err)
@@ -54,6 +56,7 @@ func docForms(t *testing.T, jsonData string) []interface{} {
 
 func (tester *getTester) checkGet(jsonData string, ptr string, expected interface{}) {
 	t := tester.t
+	t.Helper()
 	t.Logf("%v => \"%v\"", jsonData, ptr)
 
 	for _, doc := range docForms(t, jsonData) {
@@ -76,6 +79,7 @@ func (tester *getTester) checkGet(jsonData string, ptr string, expected interfac
 // ErrSyntax, a DocumentError for nil, a PtrError otherwise.
 func (tester *getTester) checkGetError(jsonData string, ptr string, expectedErr error, expectedPtr string) {
 	t := tester.t
+	t.Helper()
 	t.Logf("%v => \"%v\" (error expected)", jsonData, ptr)
 
 	for _, doc := range docForms(t, jsonData) {
@@ -343,6 +347,8 @@ func TestGet(t *testing.T) {
 }
 
 func checkSet(t *testing.T, data interface{}, ptr string, value interface{}, jsonOut string) {
+	t.Helper()
+
 	if jsonIn, isString := data.(string); isString {
 		// Same test with input converted to a RawMessage
 		checkSet(t, json.RawMessage(jsonIn), ptr, value, jsonOut)
@@ -704,6 +710,8 @@ func TestSet(t *testing.T) {
 }
 
 func checkDelete(t *testing.T, data interface{}, ptr string, expectedValue interface{}, jsonOut string) {
+	t.Helper()
+
 	t.Logf("%#v - \"%v\"", data, ptr)
 	got, err := jsonptr.Delete(&data, ptr)
 	if err != nil {
