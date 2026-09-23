@@ -58,7 +58,15 @@ func arrayIndex(token string) (int, error) {
 }
 
 // JSONDecoder is a subset of the interface of [encoding/json.Decoder].
-// It can be used as an input to Get().
+//
+// It may be given to [Get], [Pointer.In], [Set] or [Delete] for streamed
+// decoding, either as the document itself or as any value nested in it.
+// [Set] also accepts it as the value to store.
+//
+// A JSONDecoder is consumed by those calls, so it can't be reused: [Get] and
+// [Pointer.In] read from it up to the designated value, while [Set] and
+// [Delete] read its next value as a [encoding/json.RawMessage] and store that
+// raw value in the document in place of the decoder.
 type JSONDecoder interface {
 	Token() (json.Token, error)
 	More() bool
