@@ -15,7 +15,7 @@ Goals:
     * Structured errors, not just strings: [`BadPointerError`](https://pkg.go.dev/github.com/dolmen-go/jsonptr#BadPointerError), [`PtrError`](https://pkg.go.dev/github.com/dolmen-go/jsonptr#PtrError), [`DocumentError`](https://pkg.go.dev/github.com/dolmen-go/jsonptr#DocumentError)
     * Working at JSON data model level (tree of `[]interface{}`, `map[string]interface{}`) as well as serialized JSON ([`json.RawMessage`](https://pkg.go.dev/encoding/json#RawMessage), [`json.Decoder`](https://pkg.go.dev/encoding/json#Decoder))
 2. Correctness (most existing open source Go implementations have limitations in their interface or have implementation bugs)
-    * Full testsuite (work in progress)
+    * Full testsuite: for each document representation, the value returned as well as the kind and the location of the errors
     * Reject invalid escapes (regexp `/~[^01]/`)
     * Allow any JSON value as leaf node
     * Allow any JSON value as root (not just a `map[string]interface{}`)
@@ -57,9 +57,6 @@ Production ready.
 
 The aim is code coverage of 100%. Use go coverage tools and consider any
 code not covered by the testsuite as never tested and full of bugs.
-
-Todo:
-* tests of error cases
 
 ## License
 
