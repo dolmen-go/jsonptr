@@ -4,7 +4,8 @@
 
 // Package jsonptr implements JSON Pointer (RFC 6901) lookup. Fast, with strong testsuite.
 //
-// Any part of a data tree made of []interface{} or map[string]interface{}
+// Any part of a data tree made of []interface{}, map[string]interface{},
+// [encoding/json.RawMessage], []json.RawMessage, map[string]json.RawMessage
 // may be dereferenced with a JSON Pointer.
 //
 // Specification: https://tools.ietf.org/html/rfc6901
@@ -57,7 +58,15 @@ func arrayIndex(token string) (int, error) {
 }
 
 // JSONDecoder is a subset of the interface of [encoding/json.Decoder].
-// It can be used as an input to Get().
+//
+// It may be given to [Get], [Pointer.In], [Set] or [Delete] for streamed
+// decoding, either as the document itself or as any value nested in it.
+// [Set] also accepts it as the value to store.
+//
+// A JSONDecoder is consumed by those calls, so it can't be reused: [Get] and
+// [Pointer.In] read from it up to the designated value, while [Set] and
+// [Delete] read its next value as a [encoding/json.RawMessage] and store that
+// raw value in the document in place of the decoder.
 type JSONDecoder interface {
 	Token() (json.Token, error)
 	More() bool
@@ -188,6 +197,38 @@ func getLeaf(doc interface{}) (interface{}, ptrError) {
 	case JSONDecoder:
 		doc = nil
 		err = raw.Decode(&doc)
+	case []json.RawMessage:
+		// The nil case is not expected, but still handled for completeness
+		if raw == nil {
+			doc = []interface{}(nil)
+		} else {
+			arr := make([]interface{}, len(raw))
+			for i, v := range raw {
+				var perr ptrError
+				arr[i], perr = getLeaf(v)
+				if perr != nil {
+					perr.rebase(fmt.Sprintf("/%d", i))
+					return nil, perr
+				}
+			}
+			doc = arr
+		}
+	case map[string]json.RawMessage:
+		// The nil case is not expected, but still handled for completeness
+		if raw == nil {
+			doc = map[string]interface{}(nil)
+		} else {
+			m := make(map[string]interface{}, len(raw))
+			for k, v := range raw {
+				var perr ptrError
+				m[k], perr = getLeaf(v)
+				if perr != nil {
+					perr.rebase("/" + EscapeString(k))
+					return nil, perr
+				}
+			}
+			doc = m
+		}
 	default:
 		return doc, nil
 	}
@@ -199,15 +240,34 @@ func getLeaf(doc interface{}) (interface{}, ptrError) {
 
 // Get extracts a value from a JSON-like data tree.
 //
-// doc may be:
-//   - a deserialized document made of []interface{}, map[string]interface{} or any terminal value
+// In the common case doc is a deserialized document, made of []any,
+// map[string]any and terminal values. The value designated by ptr is then
+// returned as it is stored in doc: a container is the very one held by the
+// tree, so modifying it modifies doc.
+//
+// In case of error a [*BadPointerError] (invalid pointer), a [*PtrError]
+// (the pointer doesn't match the document) or a [*DocumentError] (the document
+// can't be traversed or decoded) is returned.
+//
+// # Undecoded values
+//
+// doc, or any value nested in it, may also be:
 //   - a [encoding/json.RawMessage]
-//   - a JSONDecoder (such as *[encoding/json.Decoder]) for streamed decoding
-//   - a partially deserialized document: []json.RawMessage, map[string]json.RawMessage
+//   - a [JSONDecoder] (such as *[encoding/json.Decoder]) for streamed decoding
+//   - a partially deserialized container: []json.RawMessage or
+//     map[string]json.RawMessage
 //
-// Those containers may be mixed at any level of the tree.
+// Those may be mixed with the deserialized containers at any level of the
+// tree and are traversed transparently.
 //
-// In case of error a PtrError is returned.
+// However, when such an undecoded value is the one designated by ptr, it is
+// deserialized, deeply: the result is a copy, made of []any, map[string]any
+// and terminal values, so modifying it does not modify doc. The original
+// values are lost in the process: JSON numbers become float64, and a
+// [JSONDecoder] is consumed.
+//
+// Members of a deserialized container are never decoded, so a
+// [encoding/json.RawMessage] nested in the returned value is returned as is.
 func Get(doc interface{}, ptr string) (interface{}, error) {
 	if len(ptr) == 0 {
 		return getLeaf(doc)
