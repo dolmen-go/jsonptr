@@ -385,9 +385,9 @@ func decodeLayer(raw json.RawMessage) (interface{}, error) {
 	return v, nil
 }
 
-// Set stores value at the location pointed by ptr in the document *doc.
+// Set stores value at the location pointed by ptr in the document *pdoc.
 //
-// *doc may be any document accepted by [Get]. The root of the document
+// *pdoc may be any document accepted by [Get]. The root of the document
 // (ptr == "") may be replaced. Otherwise the parent of the location must
 // exist: only the leaf is created if it doesn't exist. In an array, index "-"
 // appends the value, and an index beyond the end extends the array with
@@ -406,7 +406,7 @@ func decodeLayer(raw json.RawMessage) (interface{}, error) {
 // In case of error the document is left unchanged, except that a JSONDecoder
 // on the path is replaced by the raw value read from it (a JSONDecoder given
 // as value may also have been read).
-func Set(doc *interface{}, ptr string, value interface{}) error {
+func Set(pdoc *interface{}, ptr string, value interface{}) error {
 	if dec, isDec := value.(JSONDecoder); isDec {
 		var raw json.RawMessage
 		if err := dec.Decode(&raw); err != nil {
@@ -419,33 +419,33 @@ func Set(doc *interface{}, ptr string, value interface{}) error {
 	}
 
 	// Convert a nil ptrError to a nil error
-	if err := set(doc, ptr, value); err != nil {
+	if err := set(pdoc, ptr, value); err != nil {
 		return err
 	}
 	return nil
 }
 
 // set is the recursive implementation of [Set]: it follows the first token
-// of ptr into *doc, calls itself on the child with the rest of the path, then
-// stores the child back into *doc.
+// of ptr into *pdoc, calls itself on the child with the rest of the path, then
+// stores the child back into *pdoc.
 //
 // ptr is either empty or starts with '/'. Errors are located relatively to
-// *doc: the caller rebases them.
-func set(doc *interface{}, ptr string, value interface{}) ptrError {
+// *pdoc: the caller rebases them.
+func set(pdoc *interface{}, ptr string, value interface{}) ptrError {
 	if len(ptr) == 0 {
-		*doc = value
+		*pdoc = value
 		return nil
 	}
 
-	if raw, ok := (*doc).(JSONDecoder); ok {
+	if raw, ok := (*pdoc).(JSONDecoder); ok {
 		var r json.RawMessage
 		if err := raw.Decode(&r); err != nil {
 			return jsonError("", err)
 		}
-		*doc = r
+		*pdoc = r
 	}
 
-	parent := *doc
+	parent := *pdoc
 	if raw, ok := parent.(json.RawMessage); ok {
 		var err error
 		parent, err = decodeLayer(raw)
@@ -459,8 +459,8 @@ func set(doc *interface{}, ptr string, value interface{}) ptrError {
 	if p < 0 {
 		p = len(ptr) - 1
 	}
-	prop := ptr[1 : 1+p] // first token, the child of *doc to follow
-	curPtr := ptr[:1+p]  // "/" + prop: location of that child, relative to *doc
+	prop := ptr[1 : 1+p] // first token, the child of *pdoc to follow
+	curPtr := ptr[:1+p]  // "/" + prop: location of that child, relative to *pdoc
 	nextPtr := ptr[1+p:] // rest of the path, relative to the child
 
 	switch parent := (parent).(type) {
@@ -484,9 +484,9 @@ func set(doc *interface{}, ptr string, value interface{}) ptrError {
 		}
 		if parent != nil {
 			parent[key] = tmp
-			*doc = parent // for the case where parent was deserialized
+			*pdoc = parent // for the case where parent was deserialized
 		} else {
-			*doc = map[string]interface{}{key: tmp}
+			*pdoc = map[string]interface{}{key: tmp}
 		}
 	case map[string]json.RawMessage:
 		key, err := UnescapeString(prop)
@@ -510,9 +510,9 @@ func set(doc *interface{}, ptr string, value interface{}) ptrError {
 				m[k] = v
 			}
 			m[key] = tmp
-			*doc = m
+			*pdoc = m
 		} else {
-			*doc = map[string]interface{}{key: tmp}
+			*pdoc = map[string]interface{}{key: tmp}
 		}
 	case []interface{}:
 		n, err := arrayIndex(prop)
@@ -541,7 +541,7 @@ func set(doc *interface{}, ptr string, value interface{}) ptrError {
 			// Pad with nulls up to n
 			parent = append(parent, make([]interface{}, n-len(parent)+1)...)
 		}
-		*doc = parent // We do it in all cases (not just realloc) because parent might have originally been deserialized
+		*pdoc = parent // We do it in all cases (not just realloc) because parent might have originally been deserialized
 		parent[n] = tmp
 	case []json.RawMessage:
 		n, err := arrayIndex(prop)
@@ -572,7 +572,7 @@ func set(doc *interface{}, ptr string, value interface{}) ptrError {
 			arr[i] = v
 		}
 		arr[n] = tmp
-		*doc = arr
+		*pdoc = arr
 	default:
 		// Report the location of parent itself: the caller rebases it
 		return docError("", parent)
@@ -582,10 +582,10 @@ func set(doc *interface{}, ptr string, value interface{}) ptrError {
 }
 
 // Delete removes the value at the location pointed by ptr in the document
-// *doc, and returns it. An array element is removed by shifting the remaining
+// *pdoc, and returns it. An array element is removed by shifting the remaining
 // ones.
 //
-// *doc may be any document accepted by [Get]. The root of the document can't
+// *pdoc may be any document accepted by [Get]. The root of the document can't
 // be deleted (ErrDeleteRoot). The value must exist (ErrProperty, ErrIndex);
 // index "-" is not accepted.
 //
@@ -603,7 +603,7 @@ func set(doc *interface{}, ptr string, value interface{}) ptrError {
 //
 // In case of error the document is left unchanged, except that a JSONDecoder
 // on the path is replaced by the raw value read from it.
-func Delete(doc *interface{}, ptr string) (interface{}, error) {
+func Delete(pdoc *interface{}, ptr string) (interface{}, error) {
 	if len(ptr) == 0 {
 		return nil, &BadPointerError{ptr, ErrDeleteRoot}
 	}
@@ -612,7 +612,7 @@ func Delete(doc *interface{}, ptr string) (interface{}, error) {
 	}
 
 	// Convert a nil ptrError to a nil error
-	v, err := del(doc, ptr)
+	v, err := del(pdoc, ptr)
 	if err != nil {
 		return nil, err
 	}
@@ -620,21 +620,21 @@ func Delete(doc *interface{}, ptr string) (interface{}, error) {
 }
 
 // del is the recursive implementation of [Delete]: it follows the first token
-// of ptr into *doc, then either removes the child (last token) or calls itself
-// on the child with the rest of the path and stores the child back into *doc.
+// of ptr into *pdoc, then either removes the child (last token) or calls itself
+// on the child with the rest of the path and stores the child back into *pdoc.
 //
 // ptr is not empty and starts with '/'. Errors are located relatively to
-// *doc: the caller rebases them.
-func del(doc *interface{}, ptr string) (interface{}, ptrError) {
-	if raw, ok := (*doc).(JSONDecoder); ok {
+// *pdoc: the caller rebases them.
+func del(pdoc *interface{}, ptr string) (interface{}, ptrError) {
+	if raw, ok := (*pdoc).(JSONDecoder); ok {
 		var r json.RawMessage
 		if err := raw.Decode(&r); err != nil {
 			return nil, jsonError("", err)
 		}
-		*doc = r
+		*pdoc = r
 	}
 
-	parent := *doc
+	parent := *pdoc
 	if raw, ok := parent.(json.RawMessage); ok {
 		var err error
 		parent, err = decodeLayer(raw)
@@ -648,8 +648,8 @@ func del(doc *interface{}, ptr string) (interface{}, ptrError) {
 	if p < 0 {
 		p = len(ptr) - 1
 	}
-	prop := ptr[1 : 1+p] // first token, the child of *doc to follow
-	curPtr := ptr[:1+p]  // "/" + prop: location of that child, relative to *doc
+	prop := ptr[1 : 1+p] // first token, the child of *pdoc to follow
+	curPtr := ptr[:1+p]  // "/" + prop: location of that child, relative to *pdoc
 	nextPtr := ptr[1+p:] // rest of the path, relative to the child
 
 	switch parent := (parent).(type) {
@@ -688,7 +688,7 @@ func del(doc *interface{}, ptr string) (interface{}, ptrError) {
 		}
 		if nextPtr == "" {
 			delete(parent, key)
-			*doc = parent // for the case where parent was deserialized
+			*pdoc = parent // for the case where parent was deserialized
 			return raw, nil
 		}
 		var tmp interface{} = raw
@@ -703,7 +703,7 @@ func del(doc *interface{}, ptr string) (interface{}, ptrError) {
 			m[k] = v
 		}
 		m[key] = tmp
-		*doc = m
+		*pdoc = m
 		return v, nil
 	case []interface{}:
 		n, err := arrayIndex(prop)
@@ -718,7 +718,7 @@ func del(doc *interface{}, ptr string) (interface{}, ptrError) {
 			last := len(parent) - 1
 			copy(parent[n:], parent[n+1:])
 			parent[last] = nil // release the reference
-			*doc = parent[:last]
+			*pdoc = parent[:last]
 			return tmp, nil
 		}
 		v, perr := del(&tmp, nextPtr)
@@ -745,7 +745,7 @@ func del(doc *interface{}, ptr string) (interface{}, ptrError) {
 			last := len(parent) - 1
 			copy(parent[n:], parent[n+1:])
 			parent[last] = nil // release the reference
-			*doc = parent[:last]
+			*pdoc = parent[:last]
 			return raw, nil
 		}
 		var tmp interface{} = raw
@@ -760,7 +760,7 @@ func del(doc *interface{}, ptr string) (interface{}, ptrError) {
 			arr[i] = v
 		}
 		arr[n] = tmp
-		*doc = arr
+		*pdoc = arr
 		return v, nil
 	default:
 		// Report the location of parent itself: the caller rebases it
