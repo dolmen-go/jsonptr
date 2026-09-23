@@ -214,7 +214,14 @@ func (ptr Pointer) In(doc interface{}) (interface{}, error) {
 	return doc, err
 }
 
-// Set changes a value in document pdoc at location pointed by ptr.
+// Set stores value at the location pointed by ptr in the document *pdoc.
+// A root pointer replaces the whole document. Otherwise the parent of the
+// location must exist: only the leaf is created if it doesn't exist. In an
+// array, index "-" appends the value, and an index beyond the end extends
+// the array with nulls.
+//
+// See [Set] for how value is stored, the handling of the documents which
+// are not fully deserialized, and the errors reported.
 func (ptr Pointer) Set(pdoc *interface{}, value interface{}) error {
 	// TODO Make an optimised implementation
 	return Set(pdoc, ptr.String(), value)
