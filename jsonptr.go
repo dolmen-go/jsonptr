@@ -11,8 +11,8 @@
 // with [Pointer.In], [Pointer.Set] or [Pointer.Delete].
 //
 // A document is a tree of []any, map[string]any and terminal values, as
-// produced by [encoding/json.Unmarshal]. Any part of it may also be left
-// undecoded, as a [encoding/json.RawMessage], a [JSONDecoder] or a partially
+// produced by [json.Unmarshal]. Any part of it may also be left
+// undecoded, as a [json.RawMessage], a [JSONDecoder] or a partially
 // deserialized container ([]json.RawMessage, map[string]json.RawMessage):
 // those are traversed transparently and decoded only as far as needed.
 //
@@ -76,7 +76,7 @@ func arrayIndex(token string) (int, error) {
 //
 // A JSONDecoder is consumed by those calls, so it can't be reused: [Get] and
 // [Pointer.In] read from it up to the designated value, while [Set] and
-// [Delete] read its next value as a [encoding/json.RawMessage] and store that
+// [Delete] read its next value as a [json.RawMessage] and store that
 // raw value in the document in place of the decoder.
 type JSONDecoder interface {
 	Token() (json.Token, error)
@@ -278,7 +278,7 @@ func getLeaf(doc interface{}) (interface{}, ptrError) {
 // [JSONDecoder] is consumed.
 //
 // Members of a deserialized container are never decoded, so a
-// [encoding/json.RawMessage] nested in the returned value is returned as is.
+// [json.RawMessage] nested in the returned value is returned as is.
 func Get(doc interface{}, ptr string) (interface{}, error) {
 	if len(ptr) == 0 {
 		return getLeaf(doc)
@@ -405,10 +405,10 @@ func decodeLayer(raw json.RawMessage) (interface{}, error) {
 // nulls.
 //
 // value is stored as-is, except a [JSONDecoder] which is drained of its next
-// value into a [encoding/json.RawMessage].
+// value into a [json.RawMessage].
 //
 // Every container on the path to the value is rewritten in the tree as a
-// map[string]interface{} or a []interface{}. A [encoding/json.RawMessage] or
+// map[string]interface{} or a []interface{}. A [json.RawMessage] or
 // [JSONDecoder] on the path is decoded lazily, so only the containers on the
 // path are decoded and the values outside the path are kept raw. A
 // map[string]json.RawMessage or a []json.RawMessage on the path is converted,
@@ -601,13 +601,13 @@ func set(pdoc *interface{}, ptr string, value interface{}) ptrError {
 // index "-" is not accepted.
 //
 // The returned value is the one stored in the tree, so it is a
-// [encoding/json.RawMessage] when the container of the value is a
+// [json.RawMessage] when the container of the value is a
 // map[string]json.RawMessage or a []json.RawMessage (including when it results
 // from the lazy decoding below).
 //
 // Every container on the path to the value, except the container of the value
 // itself, is rewritten in the tree as a map[string]interface{} or a
-// []interface{}. A [encoding/json.RawMessage] or [JSONDecoder] on the path is
+// []interface{}. A [json.RawMessage] or [JSONDecoder] on the path is
 // decoded lazily, so only the containers on the path are decoded and the
 // values outside the path are kept raw. A map[string]json.RawMessage or a
 // []json.RawMessage on the path is converted, its members are kept raw.
