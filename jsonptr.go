@@ -2,11 +2,22 @@
 // Use of this source code is governed by the Apache 2.0 license that
 // can be found in the LICENSE file.
 
-// Package jsonptr implements JSON Pointer (RFC 6901) lookup. Fast, with strong testsuite.
+// Package jsonptr implements JSON Pointer (RFC 6901). Fast, with strong testsuite.
 //
-// Any part of a data tree made of []interface{}, map[string]interface{},
-// [encoding/json.RawMessage], []json.RawMessage, map[string]json.RawMessage
-// may be dereferenced with a JSON Pointer.
+// A JSON Pointer designates a value in a JSON document. [Get], [Set] and
+// [Delete] apply one, in its text form, to a document. [Parse] builds a
+// [Pointer], the parsed form, which can be moved around the document tree
+// ([Pointer.Property], [Pointer.Index], [Pointer.Up]) before being applied
+// with [Pointer.In], [Pointer.Set] or [Pointer.Delete].
+//
+// A document is a tree of []any, map[string]any and terminal values, as
+// produced by [encoding/json.Unmarshal]. Any part of it may also be left
+// undecoded, as a [encoding/json.RawMessage], a [JSONDecoder] or a partially
+// deserialized container ([]json.RawMessage, map[string]json.RawMessage):
+// those are traversed transparently and decoded only as far as needed.
+//
+// Errors tell which part of the pointer evaluation failed, and why: see
+// [BadPointerError], [PtrError] and [DocumentError].
 //
 // Specification: https://tools.ietf.org/html/rfc6901
 package jsonptr
