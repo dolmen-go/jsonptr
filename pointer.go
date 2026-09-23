@@ -220,8 +220,12 @@ func (ptr Pointer) Set(pdoc *interface{}, value interface{}) error {
 	return Set(pdoc, ptr.String(), value)
 }
 
-// Delete removes an object property or an array element (and shifts remaining ones).
-// It can't be applied on root.
+// Delete removes the value at the location pointed by ptr in the document
+// *pdoc, and returns it. An array element is removed by shifting the
+// remaining ones. The root of the document can't be deleted ([ErrDeleteRoot]).
+//
+// See [Delete] for the value returned, the handling of the documents which
+// are not fully deserialized, and the errors reported.
 func (ptr Pointer) Delete(pdoc *interface{}) (interface{}, error) {
 	// TODO Make an optimised implementation
 	return Delete(pdoc, ptr.String())
