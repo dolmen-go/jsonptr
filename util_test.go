@@ -11,6 +11,8 @@ import (
 )
 
 func TestMustValue(t *testing.T) {
+	t.Parallel()
+
 	// Should not raise exception
 	_ = jsonptr.MustValue(jsonptr.Get([]interface{}{42}, "/0"))
 

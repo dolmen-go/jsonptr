@@ -53,6 +53,8 @@ var parseTests = [...]struct {
 }
 
 func TestPointerParse(t *testing.T) {
+	t.Parallel()
+
 	targets := [...]struct {
 		Parse     func(string) (jsonptr.Pointer, error)
 		Stringify func(jsonptr.Pointer) string
@@ -114,6 +116,8 @@ func TestPointerParse(t *testing.T) {
 // TestPointerUnmarshalTextInput checks that UnmarshalText neither modifies
 // nor retains the text it is given.
 func TestPointerUnmarshalTextInput(t *testing.T) {
+	t.Parallel()
+
 	const in = "/a~1b/c~0d"
 	text := []byte(in)
 	var p jsonptr.Pointer
@@ -201,6 +205,8 @@ func BenchmarkParse(b *testing.B) {
 }
 
 func TestPointer(t *testing.T) {
+	t.Parallel()
+
 	var p jsonptr.Pointer
 	if !p.IsRoot() {
 		t.Fatal("Empty must give a root pointer")
@@ -354,6 +360,8 @@ func ExamplePointer_navigation() {
 }
 
 func TestPointerClone(t *testing.T) {
+	t.Parallel()
+
 	orig := jsonptr.Pointer{"foo"}
 	clone := orig.Copy()
 	if clone.String() != "/foo" {
@@ -368,6 +376,8 @@ func TestPointerClone(t *testing.T) {
 // TestPointerInDocumentError checks the location reported by Pointer.In
 // when the pointer goes through a value which is not an object or an array.
 func TestPointerInDocumentError(t *testing.T) {
+	t.Parallel()
+
 	for _, test := range []struct {
 		ptr jsonptr.Pointer
 		doc interface{}

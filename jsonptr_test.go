@@ -124,6 +124,8 @@ func (tester *getTester) checkGetError(jsonData string, ptr string, expectedErr 
 
 func (tester *getTester) runTest() {
 	t := tester.t
+	t.Parallel()
+
 	for _, doc := range []interface{}{
 		"x",
 		1,
@@ -395,6 +397,8 @@ func checkSet(t *testing.T, data interface{}, ptr string, value interface{}, jso
 }
 
 func TestSet(t *testing.T) {
+	t.Parallel()
+
 	checkSet(t, `null`, ``, "x", `"x"`)
 	checkSet(t, `null`, ``, 1, `1`)
 	checkSet(t, `null`, ``, []interface{}{}, `[]`)
@@ -732,6 +736,8 @@ func checkDelete(t *testing.T, data interface{}, ptr string, expectedValue inter
 }
 
 func TestDelete(t *testing.T) {
+	t.Parallel()
+
 	checkDelete(t, map[string]interface{}{"a": 1, "b": 2}, `/a`, 1, `{"b":2}`)
 	checkDelete(t, []interface{}{1, 2, 3}, `/1`, 2, `[1,3]`)
 	checkDelete(t, []interface{}{1, 2, 3}, `/2`, 3, `[1,2]`)
