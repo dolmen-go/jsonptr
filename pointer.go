@@ -41,7 +41,7 @@ func Parse(pointer string) (Pointer, error) {
 	return ptr, nil
 }
 
-// MustParse wraps Parse and panics in case of error.
+// MustParse wraps [Parse] and panics in case of error.
 func MustParse(pointer string) Pointer {
 	ptr, err := Parse(pointer)
 	if err != nil {

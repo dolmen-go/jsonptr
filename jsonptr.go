@@ -404,18 +404,18 @@ func decodeLayer(raw json.RawMessage) (interface{}, error) {
 // appends the value, and an index beyond the end extends the array with
 // nulls.
 //
-// value is stored as-is, except a JSONDecoder which is drained of its next
+// value is stored as-is, except a [JSONDecoder] which is drained of its next
 // value into a [encoding/json.RawMessage].
 //
 // Every container on the path to the value is rewritten in the tree as a
 // map[string]interface{} or a []interface{}. A [encoding/json.RawMessage] or
-// JSONDecoder on the path is decoded lazily, so only the containers on the
+// [JSONDecoder] on the path is decoded lazily, so only the containers on the
 // path are decoded and the values outside the path are kept raw. A
 // map[string]json.RawMessage or a []json.RawMessage on the path is converted,
 // its members are kept raw.
 //
-// In case of error the document is left unchanged, except that a JSONDecoder
-// on the path is replaced by the raw value read from it (a JSONDecoder given
+// In case of error the document is left unchanged, except that a [JSONDecoder]
+// on the path is replaced by the raw value read from it (a [JSONDecoder] given
 // as value may also have been read).
 func Set(pdoc *interface{}, ptr string, value interface{}) error {
 	if dec, isDec := value.(JSONDecoder); isDec {
@@ -597,7 +597,7 @@ func set(pdoc *interface{}, ptr string, value interface{}) ptrError {
 // ones.
 //
 // *pdoc may be any document accepted by [Get]. The root of the document can't
-// be deleted (ErrDeleteRoot). The value must exist (ErrProperty, ErrIndex);
+// be deleted ([ErrDeleteRoot]). The value must exist ([ErrProperty], [ErrIndex]);
 // index "-" is not accepted.
 //
 // The returned value is the one stored in the tree, so it is a
@@ -607,12 +607,12 @@ func set(pdoc *interface{}, ptr string, value interface{}) ptrError {
 //
 // Every container on the path to the value, except the container of the value
 // itself, is rewritten in the tree as a map[string]interface{} or a
-// []interface{}. A [encoding/json.RawMessage] or JSONDecoder on the path is
+// []interface{}. A [encoding/json.RawMessage] or [JSONDecoder] on the path is
 // decoded lazily, so only the containers on the path are decoded and the
 // values outside the path are kept raw. A map[string]json.RawMessage or a
 // []json.RawMessage on the path is converted, its members are kept raw.
 //
-// In case of error the document is left unchanged, except that a JSONDecoder
+// In case of error the document is left unchanged, except that a [JSONDecoder]
 // on the path is replaced by the raw value read from it.
 func Delete(pdoc *interface{}, ptr string) (interface{}, error) {
 	if len(ptr) == 0 {

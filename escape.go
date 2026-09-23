@@ -98,7 +98,7 @@ func EscapeString(name string) string {
 //	`~1` => '/'
 //	`~0` => '~'
 //
-// Any '~' followed by something else (or nothing) is an error ErrSyntax.
+// Any '~' followed by something else (or nothing) is an error [ErrSyntax].
 // Any '/' is an error ErrSyntax.
 func Unescape(b []byte) ([]byte, error) {
 	p := -1
@@ -150,7 +150,7 @@ Loop:
 //	`~1` => '/'
 //	`~0` => '~'
 //
-// Any '~' followed by something else (or nothing) is an error ErrSyntax.
+// Any '~' followed by something else (or nothing) is an error [ErrSyntax].
 // If the input contains '/' the result is undefined (may panic).
 func UnescapeString(token string) (string, error) {
 	p := -1

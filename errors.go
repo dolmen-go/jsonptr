@@ -32,7 +32,7 @@ type ptrError interface {
 type BadPointerError struct {
 	// Ptr is the substring of the original pointer where the error occurred
 	BadPtr string
-	// Err is ErrSyntax
+	// Err is [ErrSyntax]
 	Err error
 }
 
@@ -60,7 +60,7 @@ func syntaxError(ptr string) *BadPointerError {
 type PtrError struct {
 	// Ptr is the substring of the original pointer where the error occurred.
 	Ptr string
-	// Err is one of ErrIndex, ErrProperty.
+	// Err is one of [ErrIndex], [ErrProperty].
 	Err error
 }
 
@@ -85,8 +85,8 @@ func indexError(ptr string) *PtrError {
 }
 
 // badIndexError reports a token which is not a valid array index (as told by
-// arrayIndex): a BadPointerError if the token is not even a valid pointer
-// token (bad escape), else a PtrError wrapping ErrIndex.
+// arrayIndex): a [BadPointerError] if the token is not even a valid pointer
+// token (bad escape), else a [PtrError] wrapping [ErrIndex].
 func badIndexError(ptr string, token string) ptrError {
 	if _, err := UnescapeString(token); err != nil {
 		return &BadPointerError{ptr, err}
