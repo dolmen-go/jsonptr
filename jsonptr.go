@@ -232,15 +232,34 @@ func getLeaf(doc interface{}) (interface{}, ptrError) {
 
 // Get extracts a value from a JSON-like data tree.
 //
-// doc may be:
-//   - a deserialized document made of []interface{}, map[string]interface{} or any terminal value
+// In the common case doc is a deserialized document, made of []any,
+// map[string]any and terminal values. The value designated by ptr is then
+// returned as it is stored in doc: a container is the very one held by the
+// tree, so modifying it modifies doc.
+//
+// In case of error a [*BadPointerError] (invalid pointer), a [*PtrError]
+// (the pointer doesn't match the document) or a [*DocumentError] (the document
+// can't be traversed or decoded) is returned.
+//
+// # Undecoded values
+//
+// doc, or any value nested in it, may also be:
 //   - a [encoding/json.RawMessage]
-//   - a JSONDecoder (such as *[encoding/json.Decoder]) for streamed decoding
-//   - a partially deserialized document: []json.RawMessage, map[string]json.RawMessage
+//   - a [JSONDecoder] (such as *[encoding/json.Decoder]) for streamed decoding
+//   - a partially deserialized container: []json.RawMessage or
+//     map[string]json.RawMessage
 //
-// Those containers may be mixed at any level of the tree.
+// Those may be mixed with the deserialized containers at any level of the
+// tree and are traversed transparently.
 //
-// In case of error a PtrError is returned.
+// However, when such an undecoded value is the one designated by ptr, it is
+// deserialized, deeply: the result is a copy, made of []any, map[string]any
+// and terminal values, so modifying it does not modify doc. The original
+// values are lost in the process: JSON numbers become float64, and a
+// [JSONDecoder] is consumed.
+//
+// Members of a deserialized container are never decoded, so a
+// [encoding/json.RawMessage] nested in the returned value is returned as is.
 func Get(doc interface{}, ptr string) (interface{}, error) {
 	if len(ptr) == 0 {
 		return getLeaf(doc)
