@@ -408,11 +408,10 @@ func decodeLayer(raw json.RawMessage) (interface{}, error) {
 // value into a [json.RawMessage].
 //
 // Every container on the path to the value is rewritten in the tree as a
-// map[string]interface{} or a []interface{}. A [json.RawMessage] or
-// [JSONDecoder] on the path is decoded lazily, so only the containers on the
-// path are decoded and the values outside the path are kept raw. A
-// map[string]json.RawMessage or a []json.RawMessage on the path is converted,
-// its members are kept raw.
+// map[string]any or a []any. A [json.RawMessage] or [JSONDecoder] on the
+// path is decoded lazily, so only the containers on the path are decoded and
+// the values outside the path are kept raw. A map[string]json.RawMessage or
+// a []json.RawMessage on the path is converted, its members are kept raw.
 //
 // In case of error the document is left unchanged, except that a [JSONDecoder]
 // on the path is replaced by the raw value read from it (a [JSONDecoder] given
@@ -606,11 +605,11 @@ func set(pdoc *interface{}, ptr string, value interface{}) ptrError {
 // from the lazy decoding below).
 //
 // Every container on the path to the value, except the container of the value
-// itself, is rewritten in the tree as a map[string]interface{} or a
-// []interface{}. A [json.RawMessage] or [JSONDecoder] on the path is
-// decoded lazily, so only the containers on the path are decoded and the
-// values outside the path are kept raw. A map[string]json.RawMessage or a
-// []json.RawMessage on the path is converted, its members are kept raw.
+// itself, is rewritten in the tree as a map[string]any or a []any. A
+// [json.RawMessage] or [JSONDecoder] on the path is decoded lazily, so only
+// the containers on the path are decoded and the values outside the path are
+// kept raw. A map[string]json.RawMessage or a []json.RawMessage on the path
+// is converted, its members are kept raw.
 //
 // In case of error the document is left unchanged, except that a [JSONDecoder]
 // on the path is replaced by the raw value read from it.
