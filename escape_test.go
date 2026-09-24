@@ -120,6 +120,35 @@ func BenchmarkEscapeWithReplacer(b *testing.B) {
 	benchmarkEscape(b, EscapeWithReplacer, escapeBenchmarkCases)
 }
 
+// unescape is a straightforward implementation of the unescaping rules of
+// RFC 6901, used as a reference in the fuzz tests and the benchmarks.
+func unescape(token string) (string, error) {
+	var b strings.Builder
+	for i := 0; i < len(token); i++ {
+		switch token[i] {
+		case '/':
+			// Not a single token
+			return "", jsonptr.ErrUsage
+		case '~':
+			i++
+			if i == len(token) {
+				return "", jsonptr.ErrSyntax
+			}
+			switch token[i] {
+			case '0':
+				b.WriteByte('~')
+			case '1':
+				b.WriteByte('/')
+			default:
+				return "", jsonptr.ErrSyntax
+			}
+		default:
+			b.WriteByte(token[i])
+		}
+	}
+	return b.String(), nil
+}
+
 func TestUnescape(t *testing.T) {
 	for _, test := range []struct {
 		in, out string
