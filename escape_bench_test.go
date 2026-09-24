@@ -8,6 +8,7 @@
 package jsonptr_test
 
 import (
+	"encoding/json/jsontext"
 	"strings"
 	"testing"
 
@@ -31,8 +32,18 @@ var unescapeBenchmarks = [...]struct {
 	{"invalid-escape", "a~2"},
 }
 
+// unescapeJSONText unescapes a token with [jsontext.Pointer.LastToken], by
+// building the single token pointer which designates it.
+//
+// It reports no error: invalid tokens are out of its scope, so it is only
+// comparable with the other implementations on valid input.
+func unescapeJSONText(token string) (string, error) {
+	return jsontext.Pointer("/" + token).LastToken(), nil
+}
+
 // BenchmarkUnescapeString compares [jsonptr.UnescapeString] with the
-// straightforward reference implementation used by the fuzz tests.
+// reference implementation used by the fuzz tests and with the standard
+// library.
 func BenchmarkUnescapeString(b *testing.B) {
 	implementations := [...]struct {
 		name     string
@@ -40,6 +51,7 @@ func BenchmarkUnescapeString(b *testing.B) {
 	}{
 		{"jsonptr.UnescapeString", jsonptr.UnescapeString},
 		{"reference", unescape},
+		{"jsontext.Pointer.LastToken", unescapeJSONText},
 	}
 	for _, test := range unescapeBenchmarks {
 		for _, impl := range implementations {
