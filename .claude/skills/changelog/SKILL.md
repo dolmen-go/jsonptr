@@ -254,6 +254,17 @@ verbatim. Inside that section it keeps headings, link definitions and the
 code span: a newline between `]` and `[` would turn a reference into literal
 text.
 
+`reflow -c` reports the lines of the latest release which are too wide instead
+of rewriting them. It is what the CI workflow runs
+(`.github/workflows/changelog.yaml`), because the invariant worth enforcing is
+the width a reader sees, not the exact wrapping of this tool: a paragraph
+wrapped by hand at 78 columns is fine, and being nagged for it on every
+work-in-progress commit would not be.
+
+```sh
+go run ./.claude/skills/changelog/scripts/reflow -c CHANGELOG.md
+```
+
 ## Verify before committing
 
 `scripts/check-refs` checks the link integrity of the file, section by section:
