@@ -1,0 +1,35 @@
+name: Changelog
+
+# The tools are those of the 'changelog' skill, which documents the conventions
+# they check. Only changes to the changelog or to the skill itself can break
+# them, so the job stays out of the way of the test workflow.
+on:
+  push:
+    paths:
+    - 'CHANGELOG.md'
+    - '.claude/skills/changelog/**'
+    - '.github/workflows/changelog.yaml'
+
+jobs:
+
+  changelog:
+    name: Check CHANGELOG.md
+    runs-on: ubuntu-latest
+
+    steps:
+
+    - name: Check out code into the Go module directory
+      uses: actions/checkout@v7
+
+    # The tools are run with the latest Go only: they are not part of the
+    # package, so they don't have to build with the versions it supports.
+    - name: Set up Go
+      uses: actions/setup-go@v7
+      with:
+        go-version: 'stable'
+
+    - name: Check the reference-style links
+      run: make changelog-check-refs
+
+    - name: Check the line width of the latest release
+      run: go run ./.claude/skills/changelog/scripts/reflow -c CHANGELOG.md
